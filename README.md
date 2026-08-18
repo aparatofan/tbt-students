@@ -111,3 +111,29 @@ Nothing here shares a symbol with another TBT plugin: classes are
 vendored copy under the handle `tbtstu-tokens` — a handle shared with another
 plugin is a load-order race, and the loser renders against a stylesheet it was
 never written against.
+
+## Deployment
+
+`.github/workflows/deploy.yml` syncs the plugin to the live site over FTPS on
+every push to `main`. It is the same workflow TBT Swipe uses: it keeps a
+sync-state file inside the target directory and uploads only changed files, so
+the first run is the slow one. Markdown and `.github/**` changes skip the run
+entirely.
+
+Four repository secrets are required — **Settings → Secrets and variables →
+Actions**:
+
+| Secret | Value |
+|---|---|
+| `FTP_SERVER` | Host name |
+| `FTP_USERNAME` | Deploy account |
+| `FTP_PASSWORD` | Deploy account password |
+| `FTP_SERVER_DIR` | Path to the plugin folder **as the deploy account sees it after login** — often just `/tbt-students/` on a chrooted account |
+
+A preflight refuses to deploy unless `tbt-students.php` is already in the
+target directory, because the FTP client would otherwise create a wrong path
+as a new tree and report success while the live site never changed. **The
+first install therefore needs a manual run** (Actions → Deploy to WordPress →
+Run workflow) with **allow_create** ticked; every push after that is
+automatic. The same manual run offers `dry_run`, a protocol/port override and
+verbose logging for diagnosing a connection that will not open.
