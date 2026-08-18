@@ -1,0 +1,284 @@
+/* TBT Students — frontend components. Requires tokens.css (handle
+   `tbtstu-tokens`).
+
+   Where a declaration carries !important it is because the theme styles the
+   bare element — button, input, h1, p — and those rules reach inside .tbtstu
+   past a reset that deliberately carries no specificity. Each such block says
+   what it is defending against. If the pinning starts spreading, the reset is
+   the thing to reconsider, not this file. */
+
+.tbtstu-page { padding: var(--tbtstu-s6) 0 var(--tbtstu-s8); }
+.tbtstu-wrap { max-width: 1140px; margin: 0 auto; }
+
+/* The notice a non-teacher gets instead of the tool. Deliberately outside
+   .tbtstu: no assets load for that visitor, so this rule is never seen — the
+   class exists so the paragraph can be styled by a theme that wants to. */
+
+/* ---------- Tool Hero ----------
+   Replicated from TBT Swipe so the two tools read as one product. The
+   gradient, radius, padding, gap clamp and logo sizing are shared values, not
+   numbers to tune here.
+
+   The three text elements are pinned: unpinned, the theme repainted the
+   white-on-blue text in its own colour and face, which is the whole header
+   gone. */
+.tbtstu-hero {
+  display: grid; grid-template-columns: minmax(0,1fr) auto;
+  align-items: center; gap: clamp(20px, 4vw, 52px);
+  padding: 26px 28px; margin-bottom: var(--tbtstu-s7);
+  border-radius: var(--tbtstu-r-panel);
+  background: linear-gradient(135deg, var(--tbtstu-hero-from), var(--tbtstu-hero-to));
+  box-shadow: var(--tbtstu-shadow-hero);
+  color: #FFFFFF;
+}
+.tbtstu-hero-content { min-width: 0; }
+.tbtstu .tbtstu-hero-eyebrow {
+  font-family: var(--tbtstu-display) !important;
+  font-size: .78rem !important; font-weight: 800; letter-spacing: .12em;
+  line-height: 1.3 !important;
+  text-transform: uppercase; opacity: .82; color: inherit !important;
+  margin: 0 0 14px !important; padding: 0 !important;
+}
+.tbtstu .tbtstu-hero-title {
+  font-family: var(--tbtstu-title) !important;
+  font-size: clamp(1.75rem, 4vw, 2.75rem) !important; font-weight: 700;
+  line-height: 1.08 !important; letter-spacing: 0;
+  text-transform: uppercase; color: inherit !important;
+  margin: 0 !important; padding: 0 !important;
+}
+.tbtstu .tbtstu-hero-sub {
+  font-family: var(--tbtstu-display) !important;
+  max-width: 780px; margin: 10px 0 0 !important; padding: 0 !important;
+  font-size: 1rem !important; line-height: 1.55 !important;
+  opacity: .94; color: inherit !important;
+}
+.tbtstu .tbtstu-hero-sub span { display: block; }
+.tbtstu .tbtstu-hero-logo {
+  display: block; width: clamp(144px, 19.2vw, 216px);
+  height: auto; max-height: 98px; object-fit: contain;
+  margin: 0 !important; border: 0; box-shadow: none;
+}
+
+/* ---------- Section and group heads ---------- */
+.tbtstu-section-head { display: flex; align-items: baseline; gap: var(--tbtstu-s4); margin-bottom: var(--tbtstu-s5); }
+.tbtstu-section-title {
+  font-family: var(--tbtstu-display); font-size: 28px; font-weight: 700;
+  color: var(--tbtstu-blue); letter-spacing: -.01em;
+}
+.tbtstu-rule { flex: 1; height: 2px; background-color: var(--tbtstu-border); }
+
+.tbtstu-group { margin-bottom: var(--tbtstu-s6); }
+.tbtstu-group-head { display: flex; align-items: baseline; gap: var(--tbtstu-s3); margin-bottom: var(--tbtstu-s4); }
+/* The letter alone. No count: it is noise on a list this size, and one more
+   number to keep true as rows are added and removed in place. */
+.tbtstu-group-letter {
+  font-family: var(--tbtstu-display); font-size: 19px; font-weight: 700;
+  color: var(--tbtstu-ink-deep); min-width: 1.2em;
+}
+
+/* ---------- Add a student ---------- */
+.tbtstu-add { position: relative; margin-bottom: var(--tbtstu-s7); max-width: 560px; }
+.tbtstu-label {
+  display: block; font-family: var(--tbtstu-display);
+  font-size: 15px; font-weight: 600; color: var(--tbtstu-ink-deep);
+  margin-bottom: var(--tbtstu-s2);
+}
+/* Pinned for the reason the hero text is: the theme styles bare inputs, and
+   left alone the search box came out in the theme's own box and face. */
+.tbtstu .tbtstu-input {
+  display: block !important;
+  width: 100% !important; max-width: 100% !important; min-width: 0 !important;
+  background-color: var(--tbtstu-tint) !important;
+  border: 1.5px solid var(--tbtstu-border) !important;
+  border-radius: var(--tbtstu-r-ctl) !important;
+  padding: 13px var(--tbtstu-s4) !important;
+  font-family: var(--tbtstu-body) !important; font-size: 16px !important;
+  line-height: 1.4 !important; color: var(--tbtstu-ink) !important;
+  box-shadow: none;
+  transition: border-color .18s var(--tbtstu-ease), background-color .18s var(--tbtstu-ease), box-shadow .18s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-input::placeholder { color: var(--tbtstu-faint) !important; }
+.tbtstu .tbtstu-input:hover { border-color: var(--tbtstu-periwinkle) !important; }
+.tbtstu .tbtstu-input:focus {
+  outline: none; background-color: var(--tbtstu-surface) !important;
+  border-color: var(--tbtstu-blue) !important; box-shadow: 0 0 0 4px var(--tbtstu-blue-wash);
+}
+.tbtstu-help { font-size: 14px; color: var(--tbtstu-muted); margin-top: var(--tbtstu-s2) !important; }
+
+.tbtstu-results {
+  position: absolute; z-index: 20; left: 0; right: 0;
+  margin-top: var(--tbtstu-s2);
+  background-color: var(--tbtstu-surface);
+  border: 1.5px solid var(--tbtstu-border);
+  border-radius: var(--tbtstu-r-ctl);
+  box-shadow: var(--tbtstu-shadow-lift);
+  overflow: hidden;
+}
+.tbtstu-result {
+  display: block !important; width: 100% !important; text-align: left;
+  padding: 10px var(--tbtstu-s4) !important;
+  border: 0 !important; border-radius: 0 !important;
+  background-color: transparent !important;
+  font-family: var(--tbtstu-body) !important; font-size: 15px !important;
+  line-height: 1.35 !important; color: var(--tbtstu-ink) !important;
+  cursor: pointer;
+}
+.tbtstu-result:hover, .tbtstu-result:focus-visible { background-color: var(--tbtstu-tint) !important; }
+.tbtstu-result-name { display: block; font-family: var(--tbtstu-display); font-weight: 600; }
+.tbtstu-result-email { display: block; font-size: 13px; color: var(--tbtstu-muted); }
+.tbtstu-result--empty { color: var(--tbtstu-muted) !important; cursor: default; }
+.tbtstu-result--empty:hover { background-color: transparent !important; }
+
+/* ---------- Student row ----------
+   The Swipe deck row: white card, 16px radius, soft shadow, blue left spine. */
+.tbtstu-student {
+  background-color: var(--tbtstu-surface);
+  border: 1.5px solid var(--tbtstu-border);
+  border-left: 5px solid var(--tbtstu-blue);
+  border-radius: var(--tbtstu-r-card);
+  padding: var(--tbtstu-s4) var(--tbtstu-s5);
+  margin-bottom: var(--tbtstu-s3);
+  box-shadow: var(--tbtstu-shadow);
+  transition: box-shadow .18s var(--tbtstu-ease), border-color .18s var(--tbtstu-ease);
+}
+.tbtstu-student:hover { box-shadow: var(--tbtstu-shadow-lift); border-color: var(--tbtstu-periwinkle); }
+.tbtstu-student-main { display: flex; align-items: center; gap: var(--tbtstu-s4); flex-wrap: wrap; }
+.tbtstu-student-body { flex: 1 1 240px; min-width: 0; }
+.tbtstu-student-name {
+  font-family: var(--tbtstu-display); font-size: 19px; font-weight: 700;
+  color: var(--tbtstu-ink-deep); line-height: 1.3;
+}
+.tbtstu-chip {
+  display: inline-block; margin-top: var(--tbtstu-s2);
+  font-family: var(--tbtstu-display); font-size: 14px; font-weight: 700;
+  letter-spacing: .02em;
+  background-color: var(--tbtstu-maroon); color: #FFFFFF;
+  border-radius: var(--tbtstu-r-sm); padding: 3px 12px;
+}
+/* "No level set" is a state, not a warning: pale, quiet, and clearly not a
+   level that someone has chosen. */
+.tbtstu-chip--none {
+  background-color: var(--tbtstu-tint); color: var(--tbtstu-muted); font-weight: 600;
+}
+.tbtstu-student-actions { display: flex; align-items: center; gap: var(--tbtstu-s4); }
+
+/* The Level pill. Pinned like every other button on the page: the theme sizes
+   bare buttons from its own box rather than from the label. */
+.tbtstu .tbtstu-btn {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: auto !important; min-width: 0 !important; max-width: 100% !important;
+  height: auto !important; min-height: 0 !important; aspect-ratio: auto !important;
+  background-color: var(--tbtstu-surface) !important;
+  color: var(--tbtstu-blue) !important;
+  border: 1.5px solid var(--tbtstu-border) !important;
+  border-radius: var(--tbtstu-r-pill) !important;
+  padding: 9px var(--tbtstu-s5) !important;
+  font-family: var(--tbtstu-display) !important; font-weight: 600;
+  font-size: 15px !important; line-height: 1.2 !important;
+  letter-spacing: .01em; text-transform: none; text-decoration: none !important;
+  white-space: nowrap !important; text-indent: 0; cursor: pointer;
+  transition: border-color .16s var(--tbtstu-ease), background-color .16s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-btn:hover { border-color: var(--tbtstu-blue) !important; background-color: var(--tbtstu-blue-wash) !important; }
+.tbtstu .tbtstu-btn[aria-expanded="true"] { border-color: var(--tbtstu-blue) !important; background-color: var(--tbtstu-blue-wash) !important; }
+
+/* Remove is a quiet text link, not a button — it is the escape hatch for a
+   mis-added student, not something to invite. Pinned only enough to strip the
+   theme's button box back off it. */
+.tbtstu .tbtstu-remove {
+  display: inline !important; width: auto !important; height: auto !important;
+  min-width: 0 !important; min-height: 0 !important; aspect-ratio: auto !important;
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background-color: transparent !important;
+  font-family: var(--tbtstu-body) !important; font-size: 13px !important;
+  font-weight: 400 !important; line-height: 1.4 !important; text-indent: 0;
+  color: var(--tbtstu-muted) !important; text-decoration: underline !important;
+  text-underline-offset: 2px; cursor: pointer;
+  transition: color .16s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-remove:hover { color: var(--tbtstu-maroon) !important; }
+
+/* ---------- Level panel ---------- */
+.tbtstu-level {
+  margin-top: var(--tbtstu-s4); padding: var(--tbtstu-s5) var(--tbtstu-s5) var(--tbtstu-s4);
+  background-color: var(--tbtstu-tint);
+  border: 1.5px solid var(--tbtstu-border);
+  border-radius: var(--tbtstu-r-panel);
+}
+.tbtstu-readout { display: flex; align-items: baseline; gap: var(--tbtstu-s3); margin-bottom: var(--tbtstu-s4) !important; }
+.tbtstu-readout-code {
+  font-family: var(--tbtstu-display); font-size: 20px; font-weight: 700;
+  color: var(--tbtstu-blue); line-height: 1.2;
+}
+.tbtstu-readout-phrase { font-size: 13px; color: var(--tbtstu-muted); }
+
+/* The track paints its own fill from --tbtstu-fill, which the script sets as
+   a percentage on the input. One variable, both engines: WebKit takes the
+   gradient on the runnable track, Firefox on ::-moz-range-progress. */
+.tbtstu .tbtstu-range {
+  -webkit-appearance: none; appearance: none;
+  display: block !important; width: 100% !important; max-width: 100% !important;
+  height: 22px !important; min-height: 0 !important;
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  cursor: pointer;
+}
+.tbtstu .tbtstu-range::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(to right,
+    var(--tbtstu-blue) 0 var(--tbtstu-fill, 50%),
+    var(--tbtstu-border) var(--tbtstu-fill, 50%) 100%);
+}
+.tbtstu .tbtstu-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--tbtstu-blue); border: 3px solid #FFFFFF;
+  box-shadow: 0 1px 4px rgba(14,42,79,.30);
+  /* (track height - thumb height) / 2 = (6 - 22) / 2 */
+  margin-top: -8px;
+}
+.tbtstu .tbtstu-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--tbtstu-border); }
+.tbtstu .tbtstu-range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--tbtstu-blue); }
+.tbtstu .tbtstu-range::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--tbtstu-blue); border: 3px solid #FFFFFF;
+  box-shadow: 0 1px 4px rgba(14,42,79,.30);
+}
+
+/* Seven ticks at i/6 of the track. Even spacing is correct even though the
+   bands are not evenly sized in slider positions: the legend names where each
+   band STARTS, and A0…C1 each start four positions apart with C2 last. */
+.tbtstu-ticks { position: relative; height: 18px; margin-top: var(--tbtstu-s1); }
+.tbtstu-tick {
+  position: absolute; top: 0; transform: translateX(-50%);
+  font-family: var(--tbtstu-display); font-size: 12px; font-weight: 600;
+  color: var(--tbtstu-muted); letter-spacing: .04em;
+}
+/* The end labels would hang off the track otherwise. */
+.tbtstu-tick:first-child { transform: translateX(0); }
+.tbtstu-tick:last-child { transform: translateX(-100%); }
+
+.tbtstu-status { font-size: 13px; color: var(--tbtstu-muted); min-height: 1.4em; margin-top: var(--tbtstu-s2) !important; }
+.tbtstu-status.is-error { color: var(--tbtstu-maroon); }
+
+/* ---------- Empty state and notices ---------- */
+.tbtstu-empty {
+  text-align: center; padding: var(--tbtstu-s8) var(--tbtstu-s5);
+  background-color: var(--tbtstu-surface); border: 2px dashed var(--tbtstu-periwinkle);
+  border-radius: var(--tbtstu-r-panel); color: var(--tbtstu-muted); font-size: 16px;
+}
+.tbtstu-notice {
+  border-radius: var(--tbtstu-r-ctl); padding: var(--tbtstu-s3) var(--tbtstu-s4);
+  margin-bottom: var(--tbtstu-s4); font-size: 15px;
+}
+.tbtstu-notice--error { background-color: #FAF0F0; border-left: 4px solid var(--tbtstu-maroon); color: var(--tbtstu-maroon); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 580px) {
+  .tbtstu-hero { grid-template-columns: 1fr; gap: 16px; padding: 21px 19px; border-radius: 17px; }
+  .tbtstu-student { padding: var(--tbtstu-s4); }
+  /* The actions drop under the name rather than squeezing beside it, with
+     Remove still last and still quiet. */
+  .tbtstu-student-actions { width: 100%; justify-content: space-between; }
+  .tbtstu-level { padding: var(--tbtstu-s4); }
+}
