@@ -8,7 +8,8 @@
    the thing to reconsider, not this file. */
 
 .tbtstu-page { padding: var(--tbtstu-s6) 0 var(--tbtstu-s8); }
-.tbtstu-wrap { max-width: 1140px; margin: 0 auto; }
+/* Width is delegated to the surrounding Divi row — see TBT Notes Page Mode. */
+.tbtstu-wrap { max-width: none; margin: 0 auto; }
 
 /* The notice a non-teacher gets instead of the tool. Deliberately outside
    .tbtstu: no assets load for that visitor, so this rule is never seen — the
