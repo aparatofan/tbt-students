@@ -108,15 +108,37 @@ class TBT_Students_Frontend {
 	/**
 	 * The shortcode.
 	 *
+	 * @param array|string $atts Shortcode attributes.
 	 * @return string
 	 */
-	public function render() {
+	public function render( $atts = array() ) {
 		if ( ! TBT_Students_Capabilities::user_can_manage() ) {
 			// A short notice, and no assets: there is nothing here for a
 			// student, and a blank space where a tool should be reads as a
 			// broken page rather than as one that is not for them.
 			return '<p class="tbtstu-locked">' . esc_html__( 'This page is for teachers.', 'tbt-students' ) . '</p>';
 		}
+
+		/*
+		 * The Tool Hero is now supplied by the global Divi header row on the
+		 * page. hero="no" suppresses the built-in one so the two do not stack.
+		 * The default stays "yes" so a page that has not been migrated is
+		 * never left without a header.
+		 */
+		$atts = shortcode_atts(
+			array( 'hero' => 'yes' ),
+			is_array( $atts ) ? $atts : array(),
+			self::SHORTCODE
+		);
+
+		$show_hero = 'yes' === strtolower( trim( (string) $atts['hero'] ) );
+
+		/**
+		 * Filter whether the built-in Tool Hero is rendered.
+		 *
+		 * @param bool $show_hero Whether to render the hero.
+		 */
+		$show_hero = (bool) apply_filters( 'tbtstu_show_hero', $show_hero );
 
 		$students = TBT_Students_DB::for_teacher( get_current_user_id() );
 		$groups   = self::group_by_letter( $students );
@@ -127,6 +149,7 @@ class TBT_Students_Frontend {
 		<div class="tbtstu-page">
 		<div class="tbtstu-wrap">
 
+			<?php if ( $show_hero ) : ?>
 			<?php
 			/*
 			 * The Tool Hero, replicated from TBT Swipe so the two tools read
@@ -148,6 +171,7 @@ class TBT_Students_Frontend {
 					alt="<?php esc_attr_e( 'The Blue Tree', 'tbt-students' ); ?>"
 					loading="lazy" decoding="async">
 			</header>
+			<?php endif; ?>
 
 			<div class="tbtstu-notice tbtstu-notice--error" data-role="error" hidden></div>
 
