@@ -199,9 +199,11 @@
    last stop is the same colour at zero alpha rather than `transparent`, which
    is rgba(0,0,0,0) and can interpolate through grey.
 
-   The left spine is the one place the card carries the colour at full strength.
-   Hover is deliberately untouched: hover is interaction, and interaction is
-   blue. */
+   The left spine is the one place the card carries the colour at full strength,
+   and it keeps that colour on hover. The other three edges take the periwinkle
+   the base hover gives them — hover is interaction, and interaction is blue —
+   but the spine is identity, and a card that forgets whose it is under the
+   pointer forgets it exactly when someone is looking at it. */
 .tbtstu-student--c1 {
   background:
     linear-gradient(135deg, #66000014 0%, #6600000A 55%, #66000000 100%),
@@ -220,6 +222,12 @@
     var(--tbtstu-surface);
   border-left-color: var(--tbtstu-pd);
 }
+/* .tbtstu-student:hover sets border-color on all four edges, which would take
+   the spine with it. Restated after it, at the same specificity, so the three
+   interaction edges still go blue and the identity edge does not. */
+.tbtstu-student--c1:hover { border-left-color: var(--tbtstu-le); }
+.tbtstu-student--c2:hover { border-left-color: var(--tbtstu-gi); }
+.tbtstu-student--c3:hover { border-left-color: var(--tbtstu-pd); }
 .tbtstu-student-main { display: flex; align-items: center; gap: var(--tbtstu-s4); flex-wrap: wrap; }
 .tbtstu-student-body { flex: 1 1 240px; min-width: 0; }
 .tbtstu-student-name {
@@ -374,7 +382,7 @@
 .tbtstu-tick:last-child { transform: translateX(-100%); }
 
 .tbtstu-status { font-size: 13px; color: var(--tbtstu-muted); min-height: 1.4em; margin-top: var(--tbtstu-s2) !important; }
-.tbtstu-status.is-error { color: var(--tbtstu-maroon); }
+.tbtstu-status.is-error { color: var(--tbtstu-danger); }
 
 /* The readout, the badge saying where the level came from, and the way back to
    the average when it did not. */
@@ -473,7 +481,9 @@
   text-underline-offset: 2px; cursor: pointer;
   transition: color .16s var(--tbtstu-ease);
 }
-.tbtstu .tbtstu-skill-clear:hover { color: var(--tbtstu-maroon) !important; }
+/* Clear unsets a skill, so its hover is destructive and takes the danger red —
+   not --tbtstu-maroon, which is a domain colour. */
+.tbtstu .tbtstu-skill-clear:hover { color: var(--tbtstu-danger) !important; }
 
 /* Both of these are shown and hidden with the `hidden` attribute, and both
    pin `display` to strip the theme's button box off them. tokens.css pins
@@ -551,7 +561,11 @@
   border-radius: var(--tbtstu-r-ctl); padding: var(--tbtstu-s3) var(--tbtstu-s4);
   margin-bottom: var(--tbtstu-s4); font-size: 15px;
 }
-.tbtstu-notice--error { background-color: #FAF0F0; border-left: 4px solid var(--tbtstu-maroon); color: var(--tbtstu-maroon); }
+.tbtstu-notice--error {
+  background-color: var(--tbtstu-danger-bg);
+  border-left: 4px solid var(--tbtstu-danger);
+  color: var(--tbtstu-danger);
+}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 580px) {

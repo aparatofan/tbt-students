@@ -76,8 +76,13 @@ each compute only the class name, from the same arithmetic
 (`TBT_Students_Frontend::colour_class()` and `colourClass()` in `frontend.js`).
 
 The card is identity; the buttons on it are interaction, so they stay blue. The
-level chip stays `--tbtstu-maroon` for the same reason in reverse: a chip that
-followed the card would be a chip whose colour meant nothing.
+same split decides hover: hovering a card turns its other three edges
+periwinkle, but the spine keeps its colour — a card that forgot whose it was
+under the pointer would forget it exactly when someone was looking at it.
+
+The level chip stays `--tbtstu-maroon` for the reverse reason: a chip that
+followed the card would be a chip whose colour meant nothing. That is now the
+only place `--tbtstu-maroon` is used at all.
 
 `--tbtstu-le` and `--tbtstu-maroon` hold the same hex and are deliberately not
 aliases. One is Learn English's colour, the other is the level chip's; they agree
@@ -91,9 +96,14 @@ silently change the other.
   drops to the plain pill and reads **Close**, and the plus is removed rather
   than rotated into a cross.
 - **Remove** is the danger pill: `--tbtstu-danger` on a pale `--tbtstu-danger-bg`
-  surface. Destructive colour never comes from `--tbtstu-maroon`, which is a
-  domain colour. Remove is louder than the text link it replaced; its
-  confirmation step is unchanged and stays mandatory.
+  surface. Remove is louder than the text link it replaced; its confirmation
+  step is unchanged and stays mandatory.
+
+Every destructive and error colour in the plugin comes from `--tbtstu-danger` —
+Remove, the Clear link on a skill, the error status line under a panel and the
+page-level error notice. None of them comes from `--tbtstu-maroon`: that is the
+Learn English domain colour, and the Style Book names the pair as one never to
+interchange.
 
 Neither panel exists until you open it, and closing one removes it from the
 page again. Each row carries what its panels need in `data-` attributes, so the
