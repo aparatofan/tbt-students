@@ -60,7 +60,7 @@
   margin: 0 !important; border: 0; box-shadow: none;
 }
 
-/* ---------- Section and group heads ---------- */
+/* ---------- Section head ---------- */
 .tbtstu-section-head { display: flex; align-items: baseline; gap: var(--tbtstu-s4); margin-bottom: var(--tbtstu-s5); }
 .tbtstu-section-title {
   font-family: var(--tbtstu-display); font-size: 28px; font-weight: 700;
@@ -68,16 +68,63 @@
 }
 .tbtstu-rule { flex: 1; height: 2px; background-color: var(--tbtstu-border); }
 
-.tbtstu-group { margin-bottom: var(--tbtstu-s6); }
-.tbtstu-group-head { display: flex; align-items: baseline; gap: var(--tbtstu-s3); margin-bottom: var(--tbtstu-s4); }
-/* The letter alone. No count: it is noise on a list this size, and one more
-   number to keep true as rows are added and removed in place. */
-.tbtstu-group-letter {
-  font-family: var(--tbtstu-display); font-size: 19px; font-weight: 700;
-  color: var(--tbtstu-ink-deep); min-width: 1.2em;
+/* ---------- Filter bar ----------
+   The list is flat and alphabetical now, so this is how a teacher finds one
+   student among many. It sits above the list and above the search box: finding
+   is the daily act, adding is the occasional one. */
+.tbtstu-filter { margin-bottom: var(--tbtstu-s5); max-width: 720px; }
+.tbtstu-filter-row { display: flex; align-items: center; gap: var(--tbtstu-s3); flex-wrap: wrap; }
+.tbtstu-filter-row .tbtstu-input { flex: 1 1 260px; }
+
+/* A pressed-state pill. Pinned for the reason every other button here is: the
+   theme sizes bare buttons from its own box rather than from the label. */
+.tbtstu .tbtstu-toggle {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: auto !important; min-width: 0 !important; max-width: 100% !important;
+  height: auto !important; min-height: 0 !important; aspect-ratio: auto !important;
+  background-color: var(--tbtstu-surface) !important;
+  color: var(--tbtstu-muted) !important;
+  border: 1.5px solid var(--tbtstu-border) !important;
+  border-radius: var(--tbtstu-r-pill) !important;
+  padding: 9px var(--tbtstu-s4) !important;
+  font-family: var(--tbtstu-display) !important; font-weight: 600;
+  font-size: 14px !important; line-height: 1.2 !important;
+  letter-spacing: .01em; text-transform: none; text-decoration: none !important;
+  white-space: nowrap !important; text-indent: 0; cursor: pointer;
+  transition: border-color .16s var(--tbtstu-ease), background-color .16s var(--tbtstu-ease), color .16s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-toggle:hover { border-color: var(--tbtstu-periwinkle) !important; }
+.tbtstu .tbtstu-toggle.is-on {
+  background-color: var(--tbtstu-blue-wash) !important;
+  border-color: var(--tbtstu-blue) !important;
+  color: var(--tbtstu-blue) !important;
 }
 
-/* ---------- Add a student ---------- */
+/* Tabular figures so the number does not jitter as the teacher types. */
+.tbtstu-count-line {
+  font-size: 13px; color: var(--tbtstu-muted);
+  font-variant-numeric: tabular-nums; margin-top: var(--tbtstu-s2) !important;
+}
+
+/* ---------- Add a student ----------
+   Collapsed behind a quiet text toggle. The gap below it does the work of the
+   block's own bottom margin while the block is closed. */
+.tbtstu .tbtstu-add-toggle {
+  /* inline-block, not inline: the toggle carries the gap below it while the
+     block is closed, and an inline box would drop that margin on the floor. */
+  display: inline-block !important; width: auto !important; height: auto !important;
+  min-width: 0 !important; min-height: 0 !important; aspect-ratio: auto !important;
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background-color: transparent !important;
+  font-family: var(--tbtstu-display) !important; font-size: 15px !important;
+  font-weight: 600 !important; line-height: 1.4 !important; text-indent: 0;
+  color: var(--tbtstu-blue) !important; text-decoration: none !important;
+  cursor: pointer; transition: color .16s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-add-toggle:hover { color: var(--tbtstu-blue-deep) !important; }
+.tbtstu-add-toggle[aria-expanded="false"] { margin-bottom: var(--tbtstu-s6); }
+.tbtstu-add-toggle[aria-expanded="true"] { margin-bottom: var(--tbtstu-s3); }
+
 .tbtstu-add { position: relative; margin-bottom: var(--tbtstu-s7); max-width: 560px; }
 .tbtstu-label {
   display: block; font-family: var(--tbtstu-display);
@@ -276,6 +323,120 @@
 .tbtstu-status { font-size: 13px; color: var(--tbtstu-muted); min-height: 1.4em; margin-top: var(--tbtstu-s2) !important; }
 .tbtstu-status.is-error { color: var(--tbtstu-maroon); }
 
+/* The readout, the badge saying where the level came from, and the way back to
+   the average when it did not. */
+.tbtstu-level-head {
+  display: flex; align-items: baseline; gap: var(--tbtstu-s3);
+  flex-wrap: wrap; margin-bottom: var(--tbtstu-s4);
+}
+/* Beats this file's own pin on .tbtstu-readout — which is pinned because Divi
+   styles bare <p>. Inside the head the gap comes from the head. */
+.tbtstu-level-head .tbtstu-readout { margin-bottom: 0 !important; }
+
+/* Where the overall level came from, said in two words. Quiet by default,
+   because "the average of the skills" is the normal state and not news; blue
+   when a teacher has taken it over, because that is the state they need to
+   recognise before they wonder why a skill no longer moves it. */
+.tbtstu-badge {
+  display: inline-block; margin-left: auto;
+  font-family: var(--tbtstu-display); font-size: 12px; font-weight: 600;
+  letter-spacing: .02em;
+  background-color: var(--tbtstu-tint); color: var(--tbtstu-muted);
+  border-radius: var(--tbtstu-r-pill); padding: 3px 10px;
+}
+.tbtstu-badge--manual { background-color: var(--tbtstu-blue-wash); color: var(--tbtstu-blue); }
+
+/* A quiet text link, like Remove: it changes this panel rather than going
+   anywhere. Pinned only enough to strip the theme's button box back off it. */
+.tbtstu .tbtstu-usavg {
+  display: inline !important; width: auto !important; height: auto !important;
+  min-width: 0 !important; min-height: 0 !important; aspect-ratio: auto !important;
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background-color: transparent !important;
+  font-family: var(--tbtstu-body) !important; font-size: 13px !important;
+  font-weight: 400 !important; line-height: 1.4 !important; text-indent: 0;
+  color: var(--tbtstu-blue) !important; text-decoration: underline !important;
+  text-underline-offset: 2px; cursor: pointer;
+  transition: color .16s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-usavg:hover { color: var(--tbtstu-blue-deep) !important; }
+
+.tbtstu-divider { height: 1px; background-color: var(--tbtstu-border); margin: var(--tbtstu-s5) 0 var(--tbtstu-s4); }
+
+/* ---------- Language skills ----------
+   Five rows: label in a fixed column, then a half-height slider, the value,
+   and the way to unset it. */
+/* One grid for all five rows rather than a grid per row, so the four columns
+   line up down the panel — including the Clear column, which is empty on a
+   skill that is not set. Per-row grids let those tracks run long and the
+   sliders come out at five different lengths. */
+.tbtstu-skills {
+  display: grid; align-items: center;
+  grid-template-columns: 150px minmax(0, 1fr) 3.5em auto;
+  gap: var(--tbtstu-s3);
+}
+.tbtstu-skill { display: contents; }
+/* Each part names its column. Without this, a row whose Clear is hidden gives
+   up a cell and the next row's label slides into it — auto-placement fills the
+   hole rather than starting a new row. */
+.tbtstu-skill-label { grid-column: 1; }
+.tbtstu-range--skill { grid-column: 2; }
+.tbtstu-skill-value { grid-column: 3; }
+.tbtstu-skill-clear { grid-column: 4; }
+.tbtstu-skill-label {
+  font-family: var(--tbtstu-display); font-size: 14px; font-weight: 600;
+  color: var(--tbtstu-ink-deep); line-height: 1.3;
+}
+.tbtstu-skill-value {
+  font-family: var(--tbtstu-display); font-size: 14px; font-weight: 700;
+  color: var(--tbtstu-blue); font-variant-numeric: tabular-nums; text-align: right;
+}
+/* An em dash in the muted colour: "not assessed" is a state, and it must not
+   read as a level that someone chose. */
+.tbtstu-skill-value--none { color: var(--tbtstu-faint); font-weight: 600; }
+
+.tbtstu .tbtstu-skill-clear {
+  display: inline !important; width: auto !important; height: auto !important;
+  min-width: 0 !important; min-height: 0 !important; aspect-ratio: auto !important;
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background-color: transparent !important;
+  font-family: var(--tbtstu-body) !important; font-size: 12px !important;
+  font-weight: 400 !important; line-height: 1.4 !important; text-indent: 0;
+  color: var(--tbtstu-muted) !important; text-decoration: underline !important;
+  text-underline-offset: 2px; cursor: pointer;
+  transition: color .16s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-skill-clear:hover { color: var(--tbtstu-maroon) !important; }
+
+/* Both of these are shown and hidden with the `hidden` attribute, and both
+   pin `display` to strip the theme's button box off them. tokens.css pins
+   [hidden] too, but at :where() specificity — so the pins above would win and
+   a hidden link would stay on screen. Said again here, at the specificity the
+   pins have. */
+.tbtstu .tbtstu-usavg[hidden],
+.tbtstu .tbtstu-skill-clear[hidden] { display: none !important; }
+
+/* The same range at reduced weight: five of them under the overall one should
+   read as subordinate to it, not as six equals. Only the dimensions are
+   restated — the track's fill gradient and the thumb's colour come from the
+   base rule, which this one is layered on top of. */
+.tbtstu .tbtstu-range--skill { height: 16px !important; }
+.tbtstu .tbtstu-range--skill::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; }
+.tbtstu .tbtstu-range--skill::-webkit-slider-thumb {
+  width: 16px; height: 16px; border-width: 2px;
+  /* (track height - thumb height) / 2 = (4 - 16) / 2 */
+  margin-top: -6px;
+}
+.tbtstu .tbtstu-range--skill::-moz-range-track { height: 4px; border-radius: 2px; }
+.tbtstu .tbtstu-range--skill::-moz-range-progress { height: 4px; border-radius: 2px; }
+
+/* Save sits where the profile panel's does, so the two panels close the same
+   way. There is no counter to balance it against, so it simply goes right. */
+.tbtstu-level-foot {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: var(--tbtstu-s4); flex-wrap: wrap; margin-top: var(--tbtstu-s5);
+}
+
 /* ---------- Profile panel ----------
    The level panel's box, so the two read as one row opened two ways. */
 .tbtstu-profile {
@@ -334,4 +495,14 @@
   .tbtstu-student-actions { width: 100%; justify-content: space-between; }
   .tbtstu-level { padding: var(--tbtstu-s4); }
   .tbtstu-profile { padding: var(--tbtstu-s4); }
+  /* The label goes above its slider rather than shrinking beside it: a 150px
+     column and a usable track do not both fit on a phone. */
+  .tbtstu-skills { grid-template-columns: minmax(0, 1fr) 3.5em auto; row-gap: var(--tbtstu-s1); }
+  .tbtstu-skill-label { grid-column: 1 / -1; }
+  .tbtstu-range--skill { grid-column: 1; }
+  .tbtstu-skill-value { grid-column: 2; }
+  .tbtstu-skill-clear { grid-column: 3; }
+  /* Without this the five rows run together: the row gap above is the gap
+     WITHIN a skill, between its label and its slider. */
+  .tbtstu-skill + .tbtstu-skill .tbtstu-skill-label { margin-top: var(--tbtstu-s3); }
 }

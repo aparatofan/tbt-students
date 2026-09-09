@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       TBT Students
- * Description:       The student profile spine for the TBT suite. A teacher lists their students on a public page and sets each student's CEFR level.
- * Version:           0.2.0
+ * Description:       The student profile spine for the TBT suite. A teacher lists their students on a public page and sets each student's CEFR level and language skills.
+ * Version:           0.3.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            TBT
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TBTSTU_VERSION', '0.2.0' );
+define( 'TBTSTU_VERSION', '0.3.0' );
 
 /**
  * Schema version. Bumped ONLY when the table definition actually changes —
@@ -22,8 +22,12 @@ define( 'TBTSTU_VERSION', '0.2.0' );
  *
  * 2 — the `profile` column. The first real schema change this plugin has had:
  *     a short free-text note about the student, added beside `level`.
+ * 3 — the five CEFR skill columns and `level_manual`. The overall level is now
+ *     the average of whichever skills are set, unless a teacher set it by hand;
+ *     `level_manual` is what records which of the two it is. Upgrading from 2
+ *     backfills it — see TBT_Students_DB::maybe_upgrade().
  */
-define( 'TBTSTU_DB_VERSION', '2' );
+define( 'TBTSTU_DB_VERSION', '3' );
 
 /**
  * The single capability gating everything this plugin does. Teachers get it by

@@ -3,13 +3,16 @@
  * The public read API.
  *
  * This is the ONLY supported way for another plugin to ask what level a
- * student is, or what their teacher wrote about them. Nothing else in the
- * suite should touch the table, the option names, or the internal classes —
- * those are free to change; these signatures are not.
+ * student is, what their five skill levels are, or what their teacher wrote
+ * about them. Nothing else in the suite should touch the table, the option
+ * names, or the internal classes — those are free to change; these signatures
+ * are not.
  *
- * There is deliberately no write API. Levels and profiles are set by a teacher
- * on the frontend page, and a second way in would be a second place for the
- * scale and the character cap to be enforced.
+ * There is deliberately no write API. Levels, skills and profiles are set by a
+ * teacher on the frontend page, and a second way in would be a second place
+ * for the scale and the character cap to be enforced — and, since version
+ * 0.3.0, a second place that could write an overall level disagreeing with the
+ * skills it is supposed to be the average of.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -38,6 +41,44 @@ class TBT_Students {
 		 * @param int    $user_id Student user ID.
 		 */
 		return (string) apply_filters( 'tbt_student_level', $level, (int) $user_id );
+	}
+
+	/**
+	 * A student's CEFR skill levels.
+	 *
+	 * Five keys, always all five: `listening`, `reading`, `spoken_interaction`,
+	 * `spoken_production` and `writing`, in CEFR self-assessment grid order. A
+	 * consumer can read $skills['spoken_interaction'] without checking isset
+	 * first — the same reasoning behind get_level() returning '' rather than
+	 * null.
+	 *
+	 * The overall level is not one of these. get_level() answers that, and it
+	 * does not matter to a consumer whether the answer came from the average of
+	 * these five or from a teacher setting it by hand.
+	 *
+	 * @param int $user_id The student's WordPress user ID.
+	 * @return array<string,string> Skill key => one of the 25 canonical levels,
+	 *                              or '' for a skill that is not assessed. All
+	 *                              five are '' when the user is not a listed
+	 *                              student.
+	 */
+	public static function get_skills( $user_id ) {
+		$skills = TBT_Students_DB::get_skills( $user_id );
+
+		/**
+		 * Filter a student's skill levels.
+		 *
+		 * The extension point for supplying or overriding the skills from
+		 * somewhere else later — a placement test, an import, another plugin's
+		 * own assessment. Filtered values are NOT re-validated against the
+		 * scale, and a filter that drops a key is a filter that breaks the
+		 * "always all five" promise: a filter that returns nonsense is a bug in
+		 * the filter.
+		 *
+		 * @param array<string,string> $skills  Skill key => level, '' for unset.
+		 * @param int                  $user_id Student user ID.
+		 */
+		return (array) apply_filters( 'tbt_student_skills', $skills, (int) $user_id );
 	}
 
 	/**

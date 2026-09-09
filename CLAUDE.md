@@ -21,15 +21,20 @@ Keep this file concise. It is loaded at the start of every Claude Code session.
 
 ## Scope to preserve
 
-- The current plugin does two core things: a teacher adds an existing student account to their list and sets that student's CEFR level.
-- Needs analysis, skill grids, scores, and student-facing dashboards are deliberately out of scope. Do not add placeholder tables, columns, screens, or abstractions for future features unless explicitly asked.
+- The plugin does three core things: a teacher lists an existing student account, sets that student's overall CEFR level and five CEFR skill levels, and writes a short profile note about them.
+- Needs analysis, placement tests, scores, and student-facing views are deliberately out of scope. Do not add placeholder tables, columns, screens, or abstractions for future features unless explicitly asked. In particular there is no placement-test column, and a column waiting for that feature is a column that will be wrong when it arrives.
+- Finding a student is a text filter plus a "No level set" toggle. Filtering by band or by skill is out of scope.
 - The plugin is intentionally standalone. Do not introduce a dependency on TBT Notes, Swipe, Register, or Hub to solve a local task.
 
 ## Data and API invariants
 
 - CEFR levels are stored as one of the canonical 25 strings from A0 through C2. The slider index is UI-only and must not be stored as the level.
 - Reject values outside the canonical scale server-side.
-- The public integration surface is read-only: `TBT_Students::get_level( $user_id )` plus the `tbt_student_level` filter. Do not add a write API unless explicitly requested.
+- The five skills use that same scale. NULL means "not assessed", which is not A0.
+- The overall level is the average of the skills that ARE set, unless `level_manual` is 1. Unset skills are ignored, not counted as A0: three set skills average over three.
+- The average is computed in PHP (`TBT_Students_DB::average_of_skills()`) and WRITTEN INTO the `level` column on every save — never computed on read. `get_level()` is a published contract, so the column stays the one place the answer lives. The JS average is a preview of that one and must agree with it exactly; the server recomputes on save and the row repaints from the server's answer.
+- `TBT_Students_DB::skills()` and `skill_column()` are the only place a skill key, label or column name is written down. The list crosses to JS through `wp_localize_script`, as `LEVELS` does.
+- The public integration surface is read-only: `TBT_Students::get_level()`, `get_skills()` and `get_profile()`, plus the `tbt_student_level`, `tbt_student_skills` and `tbt_student_profile` filters. Do not add a write API unless explicitly requested.
 - One student belongs to one teacher in the current data model. Reassignment is remove + add.
 - A teacher may modify only rows they own (`teacher_id`); administrators may modify any row.
 - The broad customer-account search is a known limitation. Do not opportunistically redesign it during unrelated work.
