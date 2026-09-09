@@ -14,6 +14,7 @@
 	/* wp_localize_script stringifies every scalar it passes, so this arrives
 	   as "12", not 12. Coerced once here rather than at each use. */
 	var DEFAULT_INDEX = Number( cfg.defaultIndex ) || 0;
+	var PROFILE_MAX = Number( cfg.profileMax ) || 300;
 	var SEARCH_DEBOUNCE = 250;
 
 	/* Polish ordering for rows this script inserts, so a student added at
@@ -138,6 +139,18 @@
 				togglePanel( levelButton.closest( '.tbtstu-student' ) );
 				return;
 			}
+			var profileButton = event.target.closest( '[data-role="profile"]' );
+			if ( profileButton ) {
+				toggleProfilePanel( profileButton.closest( '.tbtstu-student' ) );
+				return;
+			}
+			var saveButton = event.target.closest( '[data-role="profile-save"]' );
+			if ( saveButton ) {
+				// An explicit Save, like the level panel. Nothing about a
+				// profile is saved by looking away from it.
+				saveProfile( saveButton.closest( '.tbtstu-student' ) );
+				return;
+			}
 			var removeButton = event.target.closest( '[data-role="remove"]' );
 			if ( removeButton ) {
 				removeStudent( removeButton.closest( '.tbtstu-student' ), list, empty, error );
@@ -149,6 +162,11 @@
 			if ( range ) {
 				// Live feedback only — nothing is saved on the way past.
 				paint( range.closest( '.tbtstu-student' ), Number( range.value ), true );
+				return;
+			}
+			var textarea = event.target.closest( '[data-role="profile-text"]' );
+			if ( textarea ) {
+				paintCount( textarea.closest( '.tbtstu-student' ) );
 			}
 		} );
 
@@ -289,8 +307,11 @@
 		row.className = 'tbtstu-student';
 		row.setAttribute( 'data-student-id', student.user_id );
 		row.setAttribute( 'data-level', student.level || '' );
+		row.setAttribute( 'data-profile', student.profile || '' );
 
 		var panelId = 'tbtstu-panel-' + student.user_id;
+		var profileId = 'tbtstu-profile-' + student.user_id;
+		var profileFieldId = 'tbtstu-profile-text-' + student.user_id;
 		var hasLevel = !! student.level;
 		var index = hasLevel ? indexOfLevel( student.level ) : DEFAULT_INDEX;
 
@@ -323,6 +344,26 @@
 		levelButton.setAttribute( 'aria-controls', panelId );
 		levelButton.textContent = i18n.level;
 
+		var profileButton = document.createElement( 'button' );
+		profileButton.type = 'button';
+		profileButton.className = 'tbtstu-btn';
+		profileButton.setAttribute( 'data-role', 'profile' );
+		profileButton.setAttribute( 'aria-expanded', 'false' );
+		profileButton.setAttribute( 'aria-controls', profileId );
+		profileButton.appendChild( document.createTextNode( i18n.profile ) );
+
+		// The marker a teacher reads across the list — see the PHP row for
+		// why a profile gets a dot where a level gets a chip.
+		var dot = document.createElement( 'span' );
+		dot.className = 'tbtstu-dot';
+		dot.setAttribute( 'data-role', 'profile-dot' );
+		dot.hidden = ! student.profile;
+		var dotLabel = document.createElement( 'span' );
+		dotLabel.className = 'tbtstu-sr';
+		dotLabel.textContent = i18n.profileSet;
+		dot.appendChild( dotLabel );
+		profileButton.appendChild( dot );
+
 		var removeButton = document.createElement( 'button' );
 		removeButton.type = 'button';
 		removeButton.className = 'tbtstu-remove';
@@ -330,6 +371,7 @@
 		removeButton.textContent = i18n.remove;
 
 		actions.appendChild( levelButton );
+		actions.appendChild( profileButton );
 		actions.appendChild( removeButton );
 		main.appendChild( body );
 		main.appendChild( actions );
@@ -383,8 +425,76 @@
 
 		row.appendChild( main );
 		row.appendChild( panel );
+		row.appendChild( buildProfilePanel( student, profileId, profileFieldId ) );
 
 		return row;
+	}
+
+	/**
+	 * The profile panel, matching what PHP renders for the same student.
+	 *
+	 * Both hints are built here, unconditionally and outside any toggle: the
+	 * privacy rule is what makes the field lawful to use, so it is never a
+	 * tooltip and never something the panel can be in a state without.
+	 */
+	function buildProfilePanel( student, profileId, fieldId ) {
+		var panel = document.createElement( 'div' );
+		panel.className = 'tbtstu-profile';
+		panel.id = profileId;
+		panel.setAttribute( 'data-role', 'profile-panel' );
+		panel.hidden = true;
+
+		var label = document.createElement( 'label' );
+		label.className = 'tbtstu-label';
+		label.setAttribute( 'for', fieldId );
+		label.textContent = i18n.profileLabel;
+
+		var textarea = document.createElement( 'textarea' );
+		textarea.className = 'tbtstu-textarea';
+		textarea.id = fieldId;
+		textarea.setAttribute( 'data-role', 'profile-text' );
+		textarea.rows = 3;
+		textarea.maxLength = PROFILE_MAX;
+		textarea.value = student.profile || '';
+
+		var hint = document.createElement( 'p' );
+		hint.className = 'tbtstu-help';
+		hint.textContent = i18n.profileHint;
+
+		var use = document.createElement( 'p' );
+		use.className = 'tbtstu-help';
+		use.textContent = i18n.profileUse;
+
+		var foot = document.createElement( 'div' );
+		foot.className = 'tbtstu-profile-foot';
+
+		var count = document.createElement( 'span' );
+		count.className = 'tbtstu-count';
+		count.setAttribute( 'data-role', 'profile-count' );
+		count.textContent = countLabel( ( student.profile || '' ).length );
+
+		var save = document.createElement( 'button' );
+		save.type = 'button';
+		save.className = 'tbtstu-btn';
+		save.setAttribute( 'data-role', 'profile-save' );
+		save.textContent = i18n.save;
+
+		foot.appendChild( count );
+		foot.appendChild( save );
+
+		var status = document.createElement( 'p' );
+		status.className = 'tbtstu-status';
+		status.setAttribute( 'data-role', 'profile-status' );
+		status.setAttribute( 'aria-live', 'polite' );
+
+		panel.appendChild( label );
+		panel.appendChild( textarea );
+		panel.appendChild( hint );
+		panel.appendChild( use );
+		panel.appendChild( foot );
+		panel.appendChild( status );
+
+		return panel;
 	}
 
 	/**
@@ -488,13 +598,21 @@
 	 * The level panel
 	 * ------------------------------------------------------------------ */
 
+	/**
+	 * Open or close one panel and keep its button's aria-expanded honest.
+	 * Both panels use this, so they cannot drift apart.
+	 */
+	function setPanel( button, panel, open ) {
+		panel.hidden = ! open;
+		button.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
+	}
+
 	function togglePanel( row ) {
 		var panel = row.querySelector( '[data-role="panel"]' );
 		var button = row.querySelector( '[data-role="level"]' );
 		var opening = panel.hidden;
 
-		panel.hidden = ! opening;
-		button.setAttribute( 'aria-expanded', opening ? 'true' : 'false' );
+		setPanel( button, panel, opening );
 
 		if ( opening ) {
 			var range = row.querySelector( '[data-role="range"]' );
@@ -575,6 +693,89 @@
 
 	function status( row, message, isError ) {
 		var element = row.querySelector( '[data-role="status"]' );
+		element.textContent = message || '';
+		element.classList.toggle( 'is-error', !! isError );
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * The profile panel
+	 * ------------------------------------------------------------------ */
+
+	function toggleProfilePanel( row ) {
+		var panel = row.querySelector( '[data-role="profile-panel"]' );
+		var button = row.querySelector( '[data-role="profile"]' );
+		var opening = panel.hidden;
+
+		setPanel( button, panel, opening );
+
+		if ( opening ) {
+			paintCount( row );
+			profileStatus( row, '' );
+		}
+	}
+
+	/**
+	 * The counter under the textarea. Plain text at every length — the field
+	 * stops at the cap on its own, so there is nothing to warn about.
+	 */
+	function paintCount( row ) {
+		var textarea = row.querySelector( '[data-role="profile-text"]' );
+		var count = row.querySelector( '[data-role="profile-count"]' );
+		if ( textarea && count ) {
+			count.textContent = countLabel( textarea.value.length );
+		}
+	}
+
+	function countLabel( used ) {
+		return String( i18n.profileCount || '%1$d / %2$d' )
+			.replace( '%1$d', used )
+			.replace( '%2$d', PROFILE_MAX );
+	}
+
+	/**
+	 * Show or hide the dot on the Profile button.
+	 */
+	function setProfileMarker( row, profile ) {
+		var dot = row.querySelector( '[data-role="profile-dot"]' );
+		if ( dot ) {
+			dot.hidden = ! profile;
+		}
+	}
+
+	function saveProfile( row ) {
+		var textarea = row.querySelector( '[data-role="profile-text"]' );
+		if ( ! textarea ) {
+			return;
+		}
+
+		profileStatus( row, i18n.saving );
+
+		post( 'tbtstu_set_profile', {
+			student_id: row.getAttribute( 'data-student-id' ),
+			profile: textarea.value
+		} ).then( function ( data ) {
+			var saved = data.profile || '';
+			// The server's value, not the one that was typed: it has been
+			// through sanitising, and what the field shows should be what the
+			// row actually holds.
+			textarea.value = saved;
+			row.setAttribute( 'data-profile', saved );
+			setProfileMarker( row, saved );
+			paintCount( row );
+			profileStatus( row, i18n.saved );
+		} ).catch( function ( err ) {
+			// Nothing is reverted: the teacher's text stays in the field so it
+			// can be corrected and saved again, rather than being thrown away
+			// on their behalf.
+			profileStatus( row, err.message, true );
+		} );
+	}
+
+	function profileStatus( row, message, isError ) {
+		var element = row.querySelector( '[data-role="profile-status"]' );
+		if ( ! element ) {
+			return;
+		}
 		element.textContent = message || '';
 		element.classList.toggle( 'is-error', !! isError );
 	}

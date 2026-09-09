@@ -36,6 +36,9 @@ class TBT_Students_DB {
 	 */
 	const STUDENT_ROLE = 'customer';
 
+	/** Maximum characters a profile may hold. Counted as characters, not bytes. */
+	const PROFILE_MAX = 300;
+
 	public static function table() {
 		global $wpdb;
 		return $wpdb->prefix . 'tbt_students';
@@ -63,12 +66,19 @@ class TBT_Students_DB {
 		// `level` is nullable on purpose: "no level set" is a first-class
 		// state, not an empty string. A student who has never been assessed
 		// and a student assessed at nothing are not the same thing, and NULL
-		// is the only value that says so.
+		// is the only value that says so. `profile` is nullable for the same
+		// reason: "no profile written" is not "a profile that says nothing".
+		//
+		// VARCHAR(400) for a field capped at 300 characters. A character is
+		// not a byte, and the cap is counted in characters — the headroom is
+		// against a future cap change rather than against an encoding bug,
+		// and it costs nothing on a table this size.
 		dbDelta(
 			"CREATE TABLE {$table} (
   user_id    BIGINT UNSIGNED NOT NULL,
   teacher_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
   level      VARCHAR(6)      NULL DEFAULT NULL,
+  profile    VARCHAR(400)    NULL DEFAULT NULL,
   created_at DATETIME        NOT NULL,
   updated_at DATETIME        NOT NULL,
   PRIMARY KEY  (user_id),
@@ -175,7 +185,8 @@ class TBT_Students_DB {
 	 * plugin makes, so it is enforced where it can be relied on.
 	 *
 	 * @param int $teacher_id Teacher user ID.
-	 * @return object[] Rows with user_id, teacher_id, level, display_name, email.
+	 * @return object[] Rows with user_id, teacher_id, level, profile,
+	 *                  display_name, email.
 	 */
 	public static function for_teacher( $teacher_id ) {
 		global $wpdb;
@@ -185,7 +196,7 @@ class TBT_Students_DB {
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names.
-				"SELECT s.user_id, s.teacher_id, s.level, s.created_at, s.updated_at,
+				"SELECT s.user_id, s.teacher_id, s.level, s.profile, s.created_at, s.updated_at,
 				        u.display_name, u.user_email AS email
 				 FROM {$table} s
 				 INNER JOIN {$wpdb->users} u ON u.ID = s.user_id
@@ -236,6 +247,50 @@ class TBT_Students_DB {
 		return (string) $row->level;
 	}
 
+	/**
+	 * The stored profile for a user, or '' when none is written.
+	 *
+	 * '' rather than null for the same reason get_level() returns it: this is
+	 * what the public API hands to other plugins, and a consumer that forgets
+	 * to check gets a harmless empty string instead of a fatal on a null.
+	 *
+	 * @param int $user_id Student user ID.
+	 * @return string
+	 */
+	public static function get_profile( $user_id ) {
+		$row = self::get( $user_id );
+		if ( ! $row || ! isset( $row->profile ) || null === $row->profile ) {
+			return '';
+		}
+		return (string) $row->profile;
+	}
+
+	/**
+	 * Is this profile longer than the cap?
+	 *
+	 * Characters, not bytes: the whole point of counting with mb_strlen() is
+	 * that "ą" is one character the teacher typed, not two bytes MySQL stored.
+	 *
+	 * @param string $profile Candidate profile.
+	 * @return bool
+	 */
+	public static function is_profile_too_long( $profile ) {
+		return self::profile_length( (string) $profile ) > self::PROFILE_MAX;
+	}
+
+	/**
+	 * Character length of a profile.
+	 *
+	 * Public because the row renders the counter's starting value from it, and
+	 * one definition of "how long is this" is the point.
+	 *
+	 * @param string $profile Profile text.
+	 * @return int
+	 */
+	public static function profile_length( $profile ) {
+		return function_exists( 'mb_strlen' ) ? mb_strlen( $profile, 'UTF-8' ) : strlen( $profile );
+	}
+
 	/* ------------------------------------------------------------------ *
 	 * Writes
 	 * ------------------------------------------------------------------ */
@@ -272,10 +327,11 @@ class TBT_Students_DB {
 				'user_id'    => $user_id,
 				'teacher_id' => $teacher_id,
 				'level'      => null,
+				'profile'    => null,
 				'created_at' => $now,
 				'updated_at' => $now,
 			),
-			array( '%d', '%d', '%s', '%s', '%s' )
+			array( '%d', '%d', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( ! $done ) {
@@ -318,6 +374,65 @@ class TBT_Students_DB {
 
 		if ( false === $done ) {
 			return new WP_Error( 'tbtstu_update_failed', __( 'Could not save that level.', 'tbt-students' ) );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Set (or clear) a student's profile note.
+	 *
+	 * Contexts and interests only — see the hint rendered beside the field.
+	 * Nothing here inspects what was written: a filter that half-detected
+	 * prohibited content would imply a guarantee this plugin does not make.
+	 *
+	 * @param int         $user_id Student user ID.
+	 * @param string|null $profile The note, or null/'' to clear it.
+	 * @return true|WP_Error
+	 */
+	public static function set_profile( $user_id, $profile ) {
+		global $wpdb;
+
+		$user_id = (int) $user_id;
+		if ( ! self::get( $user_id ) ) {
+			return new WP_Error( 'tbtstu_not_listed', __( 'That student is not on your list.', 'tbt-students' ) );
+		}
+
+		// Sanitised before it is measured, not after. The cap is a promise
+		// about what the column holds, so it is checked against the value that
+		// is actually going in — a string that only fits once its markup has
+		// been stripped was never within the cap.
+		$profile = ( null === $profile ) ? '' : sanitize_textarea_field( (string) $profile );
+
+		if ( '' === $profile ) {
+			// Clearing is valid, and it is how a teacher removes a profile.
+			// NULL, not '': "nothing written" is the same first-class state
+			// that `level` uses.
+			$profile = null;
+		} elseif ( self::is_profile_too_long( $profile ) ) {
+			return new WP_Error(
+				'tbtstu_profile_too_long',
+				sprintf(
+					/* translators: %d: maximum number of characters. */
+					__( 'A profile can be at most %d characters.', 'tbt-students' ),
+					self::PROFILE_MAX
+				)
+			);
+		}
+
+		$done = $wpdb->update(
+			self::table(),
+			array(
+				'profile'    => $profile,
+				'updated_at' => current_time( 'mysql' ),
+			),
+			array( 'user_id' => $user_id ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+
+		if ( false === $done ) {
+			return new WP_Error( 'tbtstu_update_failed', __( 'Could not save that profile.', 'tbt-students' ) );
 		}
 
 		return true;

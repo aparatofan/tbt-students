@@ -183,6 +183,20 @@
 .tbtstu .tbtstu-btn:hover { border-color: var(--tbtstu-blue) !important; background-color: var(--tbtstu-blue-wash) !important; }
 .tbtstu .tbtstu-btn[aria-expanded="true"] { border-color: var(--tbtstu-blue) !important; background-color: var(--tbtstu-blue-wash) !important; }
 
+/* "This student has a profile", said in the smallest way that still reads
+   across a list. A level is four characters and gets a chip; a profile is up
+   to 300, so the button carries a dot instead of the text. The dot is not the
+   whole message — it wraps a visually hidden label, because a coloured circle
+   on its own says nothing to a screen reader. */
+.tbtstu-dot {
+  display: inline-block; width: 7px; height: 7px; margin-left: var(--tbtstu-s2);
+  border-radius: 50%; background-color: var(--tbtstu-blue); flex: none;
+}
+.tbtstu-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
 /* Remove is a quiet text link, not a button — it is the escape hatch for a
    mis-added student, not something to invite. Pinned only enough to strip the
    theme's button box back off it. */
@@ -262,6 +276,43 @@
 .tbtstu-status { font-size: 13px; color: var(--tbtstu-muted); min-height: 1.4em; margin-top: var(--tbtstu-s2) !important; }
 .tbtstu-status.is-error { color: var(--tbtstu-maroon); }
 
+/* ---------- Profile panel ----------
+   The level panel's box, so the two read as one row opened two ways. */
+.tbtstu-profile {
+  margin-top: var(--tbtstu-s4); padding: var(--tbtstu-s5) var(--tbtstu-s5) var(--tbtstu-s4);
+  background-color: var(--tbtstu-tint);
+  border: 1.5px solid var(--tbtstu-border);
+  border-radius: var(--tbtstu-r-panel);
+}
+/* Pinned for the reason the search box is: the theme styles bare textareas,
+   and left alone this came out in the theme's own box and face. */
+.tbtstu .tbtstu-textarea {
+  display: block !important;
+  width: 100% !important; max-width: 100% !important; min-width: 0 !important;
+  height: auto !important; min-height: 0 !important;
+  background-color: var(--tbtstu-surface) !important;
+  border: 1.5px solid var(--tbtstu-border) !important;
+  border-radius: var(--tbtstu-r-ctl) !important;
+  padding: 11px var(--tbtstu-s4) !important;
+  font-family: var(--tbtstu-body) !important; font-size: 15px !important;
+  line-height: 1.5 !important; color: var(--tbtstu-ink) !important;
+  box-shadow: none; resize: vertical;
+  transition: border-color .18s var(--tbtstu-ease), box-shadow .18s var(--tbtstu-ease);
+}
+.tbtstu .tbtstu-textarea:hover { border-color: var(--tbtstu-periwinkle) !important; }
+.tbtstu .tbtstu-textarea:focus {
+  outline: none; border-color: var(--tbtstu-blue) !important;
+  box-shadow: 0 0 0 4px var(--tbtstu-blue-wash);
+}
+.tbtstu-profile-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--tbtstu-s4); flex-wrap: wrap; margin-top: var(--tbtstu-s4);
+}
+/* Muted at every length, including the last character. The textarea stops at
+   the cap on its own, so a colour change near it would be a warning about
+   something that cannot happen. */
+.tbtstu-count { font-size: 13px; color: var(--tbtstu-muted); font-variant-numeric: tabular-nums; }
+
 /* ---------- Empty state and notices ---------- */
 .tbtstu-empty {
   text-align: center; padding: var(--tbtstu-s8) var(--tbtstu-s5);
@@ -282,4 +333,5 @@
      Remove still last and still quiet. */
   .tbtstu-student-actions { width: 100%; justify-content: space-between; }
   .tbtstu-level { padding: var(--tbtstu-s4); }
+  .tbtstu-profile { padding: var(--tbtstu-s4); }
 }

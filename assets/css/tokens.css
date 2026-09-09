@@ -103,12 +103,12 @@
 :where(.tbtstu p, .tbtstu h1, .tbtstu h2, .tbtstu h3, .tbtstu ul, .tbtstu ol, .tbtstu li, .tbtstu figure) { margin: 0; padding: 0; }
 :where(.tbtstu ul, .tbtstu ol) { list-style: none; }
 :where(.tbtstu button) { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-:where(.tbtstu input) { font: inherit; color: inherit; }
+:where(.tbtstu input, .tbtstu textarea) { font: inherit; color: inherit; }
 :where(.tbtstu a) { color: var(--tbtstu-blue); text-decoration: none; }
 .tbtstu :focus-visible { outline: 3px solid var(--tbtstu-periwinkle); outline-offset: 2px; border-radius: var(--tbtstu-r-sm); }
 
 /* Divi sets `display` on plenty of elements, which beats the [hidden]
-   attribute's default. A closed level panel must stay closed, so this needs
+   attribute's default. A closed panel must stay closed, so this needs
    !important — :where() zeroes the specificity, not the priority. */
 :where(.tbtstu) [hidden] { display: none !important; }
 
