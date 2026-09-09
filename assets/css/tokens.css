@@ -65,6 +65,27 @@
 
   --tbtstu-maroon:     #660000;
 
+  /* Domain colours, from the Style Book. The card wash and its left spine are
+     the only places they appear — they say which student this is, not what
+     state anything is in.
+
+     --tbtstu-le holds the same hex as --tbtstu-maroon and is deliberately NOT
+     an alias of it: maroon is the level chip's colour, le is Learn English's.
+     They agree today for unrelated reasons, and merging them would make a
+     later change to one silently change the other. */
+  --tbtstu-le:         #660000;
+  --tbtstu-gi:         #663366;
+  --tbtstu-pd:         #006600;
+
+  /* Destructive actions. Every one of them comes from here — never from
+     --tbtstu-maroon, which is a domain colour and not an error colour. The
+     border is a tint between --tbtstu-border and the red, so Remove reads as
+     bordered at rest rather than outlined in full danger. */
+  --tbtstu-danger:          #C62828;
+  --tbtstu-danger-bg:       #FFF1F1;
+  --tbtstu-danger-bd:       #EED4D4;
+  --tbtstu-danger-hover-bg: #FBE4E4;
+
   --tbtstu-surface:    #FFFFFF;
   --tbtstu-border:     #D8E3F0;
 

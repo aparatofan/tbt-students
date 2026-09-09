@@ -107,23 +107,13 @@
 }
 
 /* ---------- Add a student ----------
-   Collapsed behind a quiet text toggle. The gap below it does the work of the
-   block's own bottom margin while the block is closed. */
-.tbtstu .tbtstu-add-toggle {
-  /* inline-block, not inline: the toggle carries the gap below it while the
-     block is closed, and an inline box would drop that margin on the floor. */
-  display: inline-block !important; width: auto !important; height: auto !important;
-  min-width: 0 !important; min-height: 0 !important; aspect-ratio: auto !important;
-  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
-  background-color: transparent !important;
-  font-family: var(--tbtstu-display) !important; font-size: 15px !important;
-  font-weight: 600 !important; line-height: 1.4 !important; text-indent: 0;
-  color: var(--tbtstu-blue) !important; text-decoration: none !important;
-  cursor: pointer; transition: color .16s var(--tbtstu-ease);
-}
-.tbtstu .tbtstu-add-toggle:hover { color: var(--tbtstu-blue-deep) !important; }
-.tbtstu-add-toggle[aria-expanded="false"] { margin-bottom: var(--tbtstu-s6); }
-.tbtstu-add-toggle[aria-expanded="true"] { margin-bottom: var(--tbtstu-s3); }
+   Collapsed behind a primary pill. Spacing only here: the button itself is
+   .tbtstu-btn--primary when closed and the plain pill when open, and it is
+   addressed by its role rather than by a class so the class list stays exactly
+   the two the button carries. The gap below it does the work of the block's own
+   bottom margin while the block is closed. */
+[data-role="add-toggle"][aria-expanded="false"] { margin-bottom: var(--tbtstu-s6); }
+[data-role="add-toggle"][aria-expanded="true"] { margin-bottom: var(--tbtstu-s3); }
 
 .tbtstu-add { position: relative; margin-bottom: var(--tbtstu-s7); max-width: 560px; }
 .tbtstu-label {
@@ -190,6 +180,46 @@
   transition: box-shadow .18s var(--tbtstu-ease), border-color .18s var(--tbtstu-ease);
 }
 .tbtstu-student:hover { box-shadow: var(--tbtstu-shadow-lift); border-color: var(--tbtstu-periwinkle); }
+
+/* ---------- Card identity ----------
+   A soft domain-colour wash, rotating across three colours and three angles,
+   assigned from `user_id % 3` in PHP and by the same arithmetic in JS. Keyed on
+   the id rather than on list position: a positional rotation re-colours every
+   card below a newly added student, so adding one person would repaint the
+   whole list. On the id, a student's colour is theirs permanently — through
+   adds, removes, filtering and reloads.
+
+   The wash tops out at 8% and is gone by 55%, so the name and the chip sit on
+   effectively white. Do not raise it: the row's text is --tbtstu-ink-deep and
+   the panel inside it is a pale surface, and both were contrast-checked against
+   white, not against a tint.
+
+   Written as 8-digit hex rather than color-mix() so there is no browser-support
+   question on the hosting stack — 14 is 8% of 255, 0A is 4%, 00 is none. The
+   last stop is the same colour at zero alpha rather than `transparent`, which
+   is rgba(0,0,0,0) and can interpolate through grey.
+
+   The left spine is the one place the card carries the colour at full strength.
+   Hover is deliberately untouched: hover is interaction, and interaction is
+   blue. */
+.tbtstu-student--c1 {
+  background:
+    linear-gradient(135deg, #66000014 0%, #6600000A 55%, #66000000 100%),
+    var(--tbtstu-surface);
+  border-left-color: var(--tbtstu-le);
+}
+.tbtstu-student--c2 {
+  background:
+    linear-gradient(45deg, #66336614 0%, #6633660A 55%, #66336600 100%),
+    var(--tbtstu-surface);
+  border-left-color: var(--tbtstu-gi);
+}
+.tbtstu-student--c3 {
+  background:
+    linear-gradient(200deg, #00660014 0%, #0066000A 55%, #00660000 100%),
+    var(--tbtstu-surface);
+  border-left-color: var(--tbtstu-pd);
+}
 .tbtstu-student-main { display: flex; align-items: center; gap: var(--tbtstu-s4); flex-wrap: wrap; }
 .tbtstu-student-body { flex: 1 1 240px; min-width: 0; }
 .tbtstu-student-name {
@@ -230,6 +260,45 @@
 .tbtstu .tbtstu-btn:hover { border-color: var(--tbtstu-blue) !important; background-color: var(--tbtstu-blue-wash) !important; }
 .tbtstu .tbtstu-btn[aria-expanded="true"] { border-color: var(--tbtstu-blue) !important; background-color: var(--tbtstu-blue-wash) !important; }
 
+/* The primary pill — Add a student, and nothing else on this page. Same
+   geometry as its siblings, filled rather than outlined, because it is the one
+   button here that creates something. Pinned for the reason the base pill is:
+   the theme paints bare buttons in its own colours, and a primary button
+   repainted by Divi is a primary button that no longer reads as one. */
+.tbtstu .tbtstu-btn--primary {
+  background-color: var(--tbtstu-blue) !important;
+  color: #FFFFFF !important;
+  border-color: var(--tbtstu-blue) !important;
+}
+.tbtstu .tbtstu-btn--primary:hover {
+  background-color: var(--tbtstu-blue-deep) !important;
+  border-color: var(--tbtstu-blue-deep) !important;
+}
+
+/* The danger pill — Remove, and nothing else. A pale red surface rather than a
+   solid fill: it is the escape hatch for a mis-added student, so it has to be
+   findable without inviting a click. Its colours come from --tbtstu-danger,
+   never from --tbtstu-maroon: that is the Learn English domain colour, and the
+   Style Book names the pair as one never to interchange. Pinned for the same
+   reason as every other button rule here. */
+.tbtstu .tbtstu-btn--danger {
+  background-color: var(--tbtstu-danger-bg) !important;
+  color: var(--tbtstu-danger) !important;
+  border-color: var(--tbtstu-danger-bd) !important;
+}
+.tbtstu .tbtstu-btn--danger:hover {
+  background-color: var(--tbtstu-danger-hover-bg) !important;
+  border-color: var(--tbtstu-danger) !important;
+}
+
+/* The glyph inside a button. Width and height are pinned because the theme
+   styles bare <svg>, and a themed svg stretched to the button's width is the
+   whole label pushed off the end. */
+.tbtstu .tbtstu-btn-icon {
+  width: 14px !important; height: 14px !important;
+  flex: none; margin-right: var(--tbtstu-s2);
+}
+
 /* "This student has a profile", said in the smallest way that still reads
    across a list. A level is four characters and gets a chip; a profile is up
    to 300, so the button carries a dot instead of the text. The dot is not the
@@ -243,22 +312,6 @@
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-
-/* Remove is a quiet text link, not a button — it is the escape hatch for a
-   mis-added student, not something to invite. Pinned only enough to strip the
-   theme's button box back off it. */
-.tbtstu .tbtstu-remove {
-  display: inline !important; width: auto !important; height: auto !important;
-  min-width: 0 !important; min-height: 0 !important; aspect-ratio: auto !important;
-  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
-  background-color: transparent !important;
-  font-family: var(--tbtstu-body) !important; font-size: 13px !important;
-  font-weight: 400 !important; line-height: 1.4 !important; text-indent: 0;
-  color: var(--tbtstu-muted) !important; text-decoration: underline !important;
-  text-underline-offset: 2px; cursor: pointer;
-  transition: color .16s var(--tbtstu-ease);
-}
-.tbtstu .tbtstu-remove:hover { color: var(--tbtstu-maroon) !important; }
 
 /* ---------- Level panel ---------- */
 .tbtstu-level {
@@ -366,23 +419,37 @@
 /* ---------- Language skills ----------
    Five rows: label in a fixed column, then a half-height slider, the value,
    and the way to unset it. */
-/* One grid for all five rows rather than a grid per row, so the four columns
+/* One grid for all five rows rather than a grid per row, so the five columns
    line up down the panel — including the Clear column, which is empty on a
    skill that is not set. Per-row grids let those tracks run long and the
-   sliders come out at five different lengths. */
+   sliders come out at five different lengths.
+
+   minmax(0, 1fr) rather than a bare 1fr on the slider: 1fr floors at the range
+   input's min-content width, which overflows the panel on a narrow card. */
 .tbtstu-skills {
   display: grid; align-items: center;
-  grid-template-columns: 150px minmax(0, 1fr) 3.5em auto;
+  grid-template-columns: 26px 150px minmax(0, 1fr) 44px 46px;
   gap: var(--tbtstu-s3);
 }
 .tbtstu-skill { display: contents; }
 /* Each part names its column. Without this, a row whose Clear is hidden gives
-   up a cell and the next row's label slides into it — auto-placement fills the
+   up a cell and the next row's icon slides into it — auto-placement fills the
    hole rather than starting a new row. */
-.tbtstu-skill-label { grid-column: 1; }
-.tbtstu-range--skill { grid-column: 2; }
-.tbtstu-skill-value { grid-column: 3; }
-.tbtstu-skill-clear { grid-column: 4; }
+.tbtstu-skill-icon { grid-column: 1; }
+.tbtstu-skill-label { grid-column: 2; }
+.tbtstu-range--skill { grid-column: 3; }
+.tbtstu-skill-value { grid-column: 4; }
+.tbtstu-skill-clear { grid-column: 5; }
+
+/* Decorative, and marked aria-hidden in the markup: the visible label is what
+   names the skill, and the icon is not allowed to replace it. Size is pinned
+   because the theme styles bare <svg> — an svg stretched to its column would
+   push the whole row out. */
+.tbtstu-skill-icon {
+  display: flex; align-items: center; justify-content: center;
+  flex: none; color: var(--tbtstu-blue);
+}
+.tbtstu .tbtstu-skill-icon svg { width: 19px !important; height: 19px !important; display: block; }
 .tbtstu-skill-label {
   font-family: var(--tbtstu-display); font-size: 14px; font-weight: 600;
   color: var(--tbtstu-ink-deep); line-height: 1.3;
@@ -491,18 +558,23 @@
   .tbtstu-hero { grid-template-columns: 1fr; gap: 16px; padding: 21px 19px; border-radius: 17px; }
   .tbtstu-student { padding: var(--tbtstu-s4); }
   /* The actions drop under the name rather than squeezing beside it, with
-     Remove still last and still quiet. */
+     Remove still last. */
   .tbtstu-student-actions { width: 100%; justify-content: space-between; }
   .tbtstu-level { padding: var(--tbtstu-s4); }
   .tbtstu-profile { padding: var(--tbtstu-s4); }
   /* The label goes above its slider rather than shrinking beside it: a 150px
-     column and a usable track do not both fit on a phone. */
-  .tbtstu-skills { grid-template-columns: minmax(0, 1fr) 3.5em auto; row-gap: var(--tbtstu-s1); }
-  .tbtstu-skill-label { grid-column: 1 / -1; }
-  .tbtstu-range--skill { grid-column: 1; }
-  .tbtstu-skill-value { grid-column: 2; }
-  .tbtstu-skill-clear { grid-column: 3; }
+     column and a usable track do not both fit on a phone. The icon stays on the
+     label's line — it belongs to the name, not to the slider, and giving it a
+     row of its own would make each skill three rows tall. */
+  .tbtstu-skills { grid-template-columns: 26px minmax(0, 1fr) 44px 46px; row-gap: var(--tbtstu-s1); }
+  .tbtstu-skill-icon { grid-column: 1; }
+  .tbtstu-skill-label { grid-column: 2 / -1; }
+  .tbtstu-range--skill { grid-column: 1 / 3; }
+  .tbtstu-skill-value { grid-column: 3; }
+  .tbtstu-skill-clear { grid-column: 4; }
   /* Without this the five rows run together: the row gap above is the gap
-     WITHIN a skill, between its label and its slider. */
-  .tbtstu-skill + .tbtstu-skill .tbtstu-skill-label { margin-top: var(--tbtstu-s3); }
+     WITHIN a skill, between its label and its slider. Both the icon and the
+     label take it, or the two stop sharing a baseline. */
+  .tbtstu-skill + .tbtstu-skill .tbtstu-skill-label,
+  .tbtstu-skill + .tbtstu-skill .tbtstu-skill-icon { margin-top: var(--tbtstu-s3); }
 }
