@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TBT Students
  * Description:       The student profile spine for the TBT suite. A teacher lists their students on a public page and sets each student's CEFR level and language skills.
- * Version:           0.3.0
+ * Version:           0.3.1
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            TBT
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TBTSTU_VERSION', '0.3.0' );
+define( 'TBTSTU_VERSION', '0.3.1' );
 
 /**
  * Schema version. Bumped ONLY when the table definition actually changes —

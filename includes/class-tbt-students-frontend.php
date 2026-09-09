@@ -134,8 +134,10 @@ class TBT_Students_Frontend {
 					'countLine'      => __( '%1$d of %2$d students', 'tbt-students' ),
 					'noMatch'        => __( 'No students match.', 'tbt-students' ),
 					'noStudents'     => __( 'No students yet. Search above to add your first one.', 'tbt-students' ),
-					'addShow'        => __( '+ Add a student', 'tbt-students' ),
-					'addHide'        => __( '− Add a student', 'tbt-students' ),
+					// Sentence case, and no glyph in the string: the plus is drawn,
+					// not typed, so it matches the stroke weight beside it.
+					'addShow'        => __( 'Add a student', 'tbt-students' ),
+					'addHide'        => __( 'Close', 'tbt-students' ),
 				),
 			)
 		);
@@ -257,9 +259,23 @@ class TBT_Students_Frontend {
 			 * below the filter, and everything inside it is exactly what it was.
 			 */
 			?>
-			<button type="button" class="tbtstu-add-toggle" data-role="add-toggle"
+			<button type="button" class="tbtstu-btn tbtstu-btn--primary" data-role="add-toggle"
 				aria-expanded="false" aria-controls="tbtstu-add">
-				<?php esc_html_e( '+ Add a student', 'tbt-students' ); ?>
+				<?php
+				/*
+				 * A drawn plus rather than a "+" character, which would not
+				 * match the stroke weight of anything beside it. Decorative:
+				 * the label next to it is what the button is called.
+				 *
+				 * Opening the block swaps this for the plain pill and the word
+				 * "Close" — see paintAddToggle() in frontend.js, which builds
+				 * the same two states.
+				 */
+				?>
+				<svg class="tbtstu-btn-icon" viewBox="0 0 24 24" width="14" height="14"
+					fill="none" stroke="currentColor" stroke-width="2.4"
+					stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+				<span><?php esc_html_e( 'Add a student', 'tbt-students' ); ?></span>
 			</button>
 
 			<div class="tbtstu-add" id="tbtstu-add" hidden>
@@ -310,6 +326,28 @@ class TBT_Students_Frontend {
 	}
 
 	/**
+	 * The card's colour class.
+	 *
+	 * Three domain colours rotating on `user_id % 3`, never on the student's
+	 * position in the list: a positional rotation re-colours every card below a
+	 * newly added student, so a teacher who adds one person would watch their
+	 * whole list change colour. Keyed on the id, a student's colour is theirs
+	 * permanently — through adds, removes, filtering and reloads.
+	 *
+	 * The colours themselves live in frontend.css. Nothing here knows a hex
+	 * value, and no gradient is ever written inline.
+	 *
+	 * Transcribed in colourClass() in frontend.js, which colours the row JS
+	 * builds after an add.
+	 *
+	 * @param int $user_id Student user ID.
+	 * @return string
+	 */
+	public static function colour_class( $user_id ) {
+		return 'tbtstu-student--c' . ( ( (int) $user_id % 3 ) + 1 );
+	}
+
+	/**
 	 * The `data-` attribute a skill's level is carried in.
 	 *
 	 * Underscores become dashes, so `spoken_interaction` reads as
@@ -345,7 +383,8 @@ class TBT_Students_Frontend {
 		// never shows it.
 		$email = isset( $row->email ) ? (string) $row->email : '';
 		?>
-		<div class="tbtstu-student" data-student-id="<?php echo esc_attr( (int) $row->user_id ); ?>"
+		<div class="tbtstu-student <?php echo esc_attr( self::colour_class( $row->user_id ) ); ?>"
+			data-student-id="<?php echo esc_attr( (int) $row->user_id ); ?>"
 			data-email="<?php echo esc_attr( $email ); ?>"
 			data-level="<?php echo esc_attr( $level ); ?>"
 			data-level-manual="<?php echo esc_attr( $levels['level_manual'] ? '1' : '0' ); ?>"
@@ -385,14 +424,14 @@ class TBT_Students_Frontend {
 					</button>
 					<?php
 					/*
-					 * A <button> painted as a quiet text link, not an <a>: it
-					 * performs an action rather than going anywhere, and an
-					 * anchor with no destination is a worse thing to hand a
-					 * keyboard or a screen reader than a button that has been
-					 * asked to look calm.
+					 * The danger pill: a pale red surface rather than a solid
+					 * fill, so it is findable without inviting a click. Its
+					 * confirm step is what actually protects the row, and that
+					 * is unchanged and stays mandatory — see removeStudent()
+					 * in frontend.js.
 					 */
 					?>
-					<button type="button" class="tbtstu-remove" data-role="remove">
+					<button type="button" class="tbtstu-btn tbtstu-btn--danger" data-role="remove">
 						<?php esc_html_e( 'Remove', 'tbt-students' ); ?>
 					</button>
 				</div>

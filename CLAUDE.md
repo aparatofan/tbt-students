@@ -44,6 +44,8 @@ Keep this file concise. It is loaded at the start of every Claude Code session.
 - Keep plugin symbols isolated: `TBT_Students*`, `TBTSTU_*`, `tbtstu-*`, `.tbtstu-*`, and `--tbtstu-*`.
 - Do not reuse another plugin's asset handle or CSS namespace merely because the visual design is similar.
 - The plugin's token stylesheet is intentionally private/local to avoid cross-plugin registration races.
+- Destructive and error colour comes from `--tbtstu-danger*`, never from `--tbtstu-maroon`. Maroon is the Learn English domain colour and its only remaining job is the level chip; the two hold the same hex for unrelated reasons and must not be merged.
+- Domain colours (`--tbtstu-le`, `--tbtstu-gi`, `--tbtstu-pd`) appear only in the student card's wash and its left spine, assigned from `user_id % 3`. Never key that rotation on list position.
 - Preserve existing Tool Hero behavior and the `hero` shortcode/filter override when working on page layout.
 
 ## Security rules

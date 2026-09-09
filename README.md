@@ -43,7 +43,8 @@ plugin's assets.
   stays open after an add, because adding two students in a row is the common
   case.
 - **The list** — flat and alphabetical in Polish order, with no letter groups.
-  `Ł` is its own letter and sorts after `L`.
+  `Ł` is its own letter and sorts after `L`. Each card carries a soft
+  domain-colour wash — see [Card colours](#card-colours).
 - **Levels** — opens the overall level and the five language skills. See
   [Levels and skills](#levels-and-skills).
 - **Profile** — opens a short free-text field about the student. A dot on the
@@ -51,6 +52,58 @@ plugin's assets.
   one without opening every panel.
 - **Remove** — takes the student off your list. Their WordPress account is
   untouched.
+
+### Card colours
+
+Every student card gets one of three domain colours from the Style Book, as a
+gradient wash across the card and as the solid colour of its left spine:
+
+| `user_id % 3` | Class | Colour | Angle |
+|---|---|---|---|
+| 0 | `tbtstu-student--c1` | `--tbtstu-le` `#660000` | 135deg |
+| 1 | `tbtstu-student--c2` | `--tbtstu-gi` `#663366` | 45deg |
+| 2 | `tbtstu-student--c3` | `--tbtstu-pd` `#006600` | 200deg |
+
+**Keyed on `user_id`, never on position in the list.** A positional rotation
+re-colours every card below a newly added student, so a teacher who adds one
+person would watch their whole list change colour. On the id, a student's colour
+is theirs permanently — through adds, removes, filtering and reloads.
+
+The wash tops out at 8% and is gone by 55% of the card, so the name and the chip
+sit on effectively white; the text was contrast-checked against white, not
+against a tint. The colours live in `frontend.css` and nowhere else — PHP and JS
+each compute only the class name, from the same arithmetic
+(`TBT_Students_Frontend::colour_class()` and `colourClass()` in `frontend.js`).
+
+The card is identity; the buttons on it are interaction, so they stay blue. The
+same split decides hover: hovering a card turns its other three edges
+periwinkle, but the spine keeps its colour — a card that forgot whose it was
+under the pointer would forget it exactly when someone was looking at it.
+
+The level chip stays `--tbtstu-maroon` for the reverse reason: a chip that
+followed the card would be a chip whose colour meant nothing. That is now the
+only place `--tbtstu-maroon` is used at all.
+
+`--tbtstu-le` and `--tbtstu-maroon` hold the same hex and are deliberately not
+aliases. One is Learn English's colour, the other is the level chip's; they agree
+today for unrelated reasons, and merging them would make a later change to one
+silently change the other.
+
+### Buttons
+
+- **Add a student** is the primary pill — filled blue, white label, a drawn plus
+  glyph. It is the only control on the page that creates something. Open, it
+  drops to the plain pill and reads **Close**, and the plus is removed rather
+  than rotated into a cross.
+- **Remove** is the danger pill: `--tbtstu-danger` on a pale `--tbtstu-danger-bg`
+  surface. Remove is louder than the text link it replaced; its confirmation
+  step is unchanged and stays mandatory.
+
+Every destructive and error colour in the plugin comes from `--tbtstu-danger` —
+Remove, the Clear link on a skill, the error status line under a panel and the
+page-level error notice. None of them comes from `--tbtstu-maroon`: that is the
+Learn English domain colour, and the Style Book names the pair as one never to
+interchange.
 
 Neither panel exists until you open it, and closing one removes it from the
 page again. Each row carries what its panels need in `data-` attributes, so the
@@ -93,6 +146,15 @@ self-assessment grid order:
 | `spoken_interaction` | Spoken interaction | `skill_spoken_interaction` |
 | `spoken_production` | Spoken production | `skill_spoken_production` |
 | `writing` | Writing | `skill_writing` |
+
+Each row carries a TBT-drawn icon — headphones, an open book, two speech
+bubbles, one speech bubble, a pencil. Two bubbles for interaction and one for
+production, so the icons carry the same distinction the labels do. They are
+TBT's own rather than the Council of Europe's or Europass's ELP set: owned icons
+win where they exist. Each is decorative and `aria-hidden`; the visible label is
+what names the skill, and the icon never replaces it. The paths live in one
+`SKILL_ICONS` map in `frontend.js`, keyed by the same keys
+`TBT_Students_DB::skills()` defines.
 
 Each skill uses the same 25-value scale, and each may be unset. **Unset is not
 A0.** A skill nobody has assessed reads `—`, and a **Clear** link — shown only

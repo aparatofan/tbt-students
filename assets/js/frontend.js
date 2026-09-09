@@ -35,6 +35,44 @@
 	   space: "not assessed" is a state, and it has to look like one. */
 	var NONE = '—';
 
+	var SVG_NS = 'http://www.w3.org/2000/svg';
+
+	/* TBT-drawn skill icons, keyed by the same skill keys
+	   TBT_Students_DB::skills() defines. Static path data — nothing
+	   user-supplied ever reaches them — and TBT's own, not the Council of
+	   Europe's or Europass's: owned icons win where they exist.
+
+	   Two speech bubbles for interaction and one for production, so the icons
+	   carry the same distinction the labels do. */
+	var SKILL_ICONS = {
+		listening: [
+			'M5 11a7 7 0 0 1 14 0',
+			'M5 11v3a3 3 0 0 0 3 3h0v-6H6a1 1 0 0 0-1 1Z',
+			'M19 11v3a3 3 0 0 1-3 3h0v-6h2a1 1 0 0 1 1 1Z'
+		],
+		reading: [
+			'M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4Z',
+			'M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6Z'
+		],
+		spoken_interaction: [
+			'M3 6h11v8H8l-5 4V6Z',
+			'M17 9h4v8l-3-2h-6'
+		],
+		spoken_production: [
+			'M4 5h16v11H10l-6 4V5Z',
+			'M8 9h8M8 12h5'
+		],
+		writing: [
+			'M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z',
+			'M14.5 7.5 17.5 10.5'
+		]
+	};
+
+	/* The plus on the Add a student button. A drawn glyph rather than a "+"
+	   character, which would not match the stroke weight of anything beside
+	   it. */
+	var PLUS_ICON = [ 'M12 5v14M5 12h14' ];
+
 	/* Polish ordering for rows this script inserts, so a student added at
 	   4pm lands where a page reload would have put them. The browser's own
 	   collator, given the same locale the server uses. */
@@ -193,6 +231,19 @@
 	 */
 	function skillAttribute( key ) {
 		return 'data-skill-' + key.replace( /_/g, '-' );
+	}
+
+	/**
+	 * The card's colour class.
+	 *
+	 * A direct transcription of TBT_Students_Frontend::colour_class(): the same
+	 * arithmetic on the same number, so a change to one is obviously a change to
+	 * the other. Keyed on the student's id and never on their position in the
+	 * list — a positional rotation would repaint every card below a newly added
+	 * student, and a student's colour is meant to be theirs permanently.
+	 */
+	function colourClass( userId ) {
+		return 'tbtstu-student--c' + ( ( Number( userId ) % 3 ) + 1 );
 	}
 
 	function rowLevel( row ) {
@@ -403,14 +454,41 @@
 		ui.addToggle.addEventListener( 'click', function () {
 			var opening = ui.addPanel.hidden;
 			ui.addPanel.hidden = ! opening;
-			ui.addToggle.setAttribute( 'aria-expanded', opening ? 'true' : 'false' );
-			ui.addToggle.textContent = opening ? i18n.addHide : i18n.addShow;
+			paintAddToggle( ui.addToggle, opening );
 			if ( opening ) {
 				ui.search.focus();
 			} else {
 				hideResults( ui );
 			}
 		} );
+	}
+
+	/**
+	 * The Add a student button, in whichever of its two states.
+	 *
+	 * Closed it is the primary pill with a plus: it is the one control on this
+	 * page that creates something. Open it drops to the plain pill and reads
+	 * "Close", and the plus is REMOVED rather than rotated into a cross — a
+	 * rotated plus is a close icon that spent a moment pretending to be an add
+	 * icon.
+	 *
+	 * The contents are rebuilt rather than assigned to textContent, because
+	 * textContent would take the glyph with it.
+	 */
+	function paintAddToggle( button, open ) {
+		button.className = open ? 'tbtstu-btn' : 'tbtstu-btn tbtstu-btn--primary';
+		button.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
+		button.textContent = '';
+
+		if ( ! open ) {
+			var glyph = icon( PLUS_ICON, 14, 2.4 );
+			glyph.setAttribute( 'class', 'tbtstu-btn-icon' );
+			button.appendChild( glyph );
+		}
+
+		var label = document.createElement( 'span' );
+		label.textContent = open ? i18n.addHide : i18n.addShow;
+		button.appendChild( label );
 	}
 
 	function initSearch( ui ) {
@@ -540,7 +618,7 @@
 	 */
 	function buildRow( student ) {
 		var row = document.createElement( 'div' );
-		row.className = 'tbtstu-student';
+		row.className = 'tbtstu-student ' + colourClass( student.user_id );
 		row.setAttribute( 'data-student-id', student.user_id );
 		row.setAttribute( 'data-email', student.email || '' );
 		row.setAttribute( 'data-level', student.level || '' );
@@ -605,7 +683,7 @@
 
 		var removeButton = document.createElement( 'button' );
 		removeButton.type = 'button';
-		removeButton.className = 'tbtstu-remove';
+		removeButton.className = 'tbtstu-btn tbtstu-btn--danger';
 		removeButton.setAttribute( 'data-role', 'remove' );
 		removeButton.textContent = i18n.remove;
 
@@ -652,6 +730,43 @@
 			node.setAttribute( 'data-role', role );
 		}
 		return node;
+	}
+
+	/**
+	 * One inline SVG from a list of path strings.
+	 *
+	 * Built through the DOM rather than assigned as innerHTML — the paths are
+	 * static and could not carry anything, but nothing in this file parses
+	 * markup and this is not the place to start.
+	 *
+	 * Always aria-hidden. Every icon here sits beside its own visible text
+	 * label, so it says nothing to a screen reader that the label has not
+	 * already said.
+	 *
+	 * @param {string[]} paths       Path `d` values.
+	 * @param {number}   size        Rendered width and height in px.
+	 * @param {number}   strokeWidth Stroke weight in viewBox units.
+	 * @return {SVGElement}
+	 */
+	function icon( paths, size, strokeWidth ) {
+		var svg = document.createElementNS( SVG_NS, 'svg' );
+		svg.setAttribute( 'viewBox', '0 0 24 24' );
+		svg.setAttribute( 'width', String( size ) );
+		svg.setAttribute( 'height', String( size ) );
+		svg.setAttribute( 'fill', 'none' );
+		svg.setAttribute( 'stroke', 'currentColor' );
+		svg.setAttribute( 'stroke-width', String( strokeWidth ) );
+		svg.setAttribute( 'stroke-linecap', 'round' );
+		svg.setAttribute( 'stroke-linejoin', 'round' );
+		svg.setAttribute( 'aria-hidden', 'true' );
+
+		paths.forEach( function ( d ) {
+			var path = document.createElementNS( SVG_NS, 'path' );
+			path.setAttribute( 'd', d );
+			svg.appendChild( path );
+		} );
+
+		return svg;
 	}
 
 	/**
@@ -826,6 +941,11 @@
 		wrap.setAttribute( 'data-skill', key );
 		wrap.setAttribute( 'data-value', value || '' );
 
+		var glyph = make( 'span', 'tbtstu-skill-icon' );
+		if ( SKILL_ICONS[ key ] ) {
+			glyph.appendChild( icon( SKILL_ICONS[ key ], 19, 1.7 ) );
+		}
+
 		var label = make( 'span', 'tbtstu-skill-label' );
 		label.textContent = SKILLS[ key ];
 
@@ -844,6 +964,7 @@
 		clear.textContent = i18n.clear;
 		clear.setAttribute( 'aria-label', format( i18n.clearSkill, SKILLS[ key ] ) );
 
+		wrap.appendChild( glyph );
 		wrap.appendChild( label );
 		wrap.appendChild( range );
 		wrap.appendChild( readout );
