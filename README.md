@@ -1,17 +1,19 @@
 # TBT Students
 
 The student profile spine for the TBT suite. A teacher adds an existing
-`customer` account to their student list, sets that student's CEFR level, and
-writes a short profile note about them for the rest of the suite to read.
+`customer` account to their student list, sets that student's CEFR level and
+five CEFR skill levels, and writes a short profile note about them for the rest
+of the suite to read.
 
 - **WordPress** 6.x, **PHP** 8.0+, Divi theme, self-hosted
 - Pure PHP + vanilla JS. No jQuery, no build tools, no CDN, everything self-hosted.
 - Stands alone: no dependency on TBT Notes, TBT Swipe, TBT Register or TBT-Hub,
   and it does not call into any of them.
 
-Needs analysis, the seven-skill grid, scores and anything student-facing are
-**out of scope** for this version — there are deliberately no placeholders,
-stub screens or database columns for them.
+Needs analysis, placement tests, scores and anything student-facing are **out of
+scope** — there are deliberately no placeholders, stub screens or database
+columns for them. A column waiting for a feature is a column that will be wrong
+when the feature arrives.
 
 ## Setup
 
@@ -28,19 +30,34 @@ plugin's assets.
 [tbt_students]
 ```
 
-- **Add student** — type a username, name or email; matching `customer`
-  accounts appear under the box, and clicking one adds them to your list.
-  Accounts already on a list are not offered.
-- **The list** — students grouped by the first letter of their display name,
-  in Polish alphabetical order. `Ł` is its own letter and sorts after `L`.
-- **Level** — opens a 25-position slider. The readout above it names the level
-  and what it means; the chip under the student's name shows the saved value,
-  or "No level set".
+- **Filter your students** — a text box over your own list, matching on display
+  name **and** email, case-insensitively. It is accent-sensitive on purpose:
+  typing `Ł` finds `Łukasz` and not `Lukasz`, because a teacher who reaches for
+  that key means it. Beside it, a **No level set** toggle keeps only students
+  who have no overall level; it ANDs with the text box. A count reads
+  `n of m students`. All of it is client-side over rows already on the page —
+  no request, no waiting.
+- **+ Add a student** — collapsed by default. Open it and type a username, name
+  or email; matching `customer` accounts appear under the box, and clicking one
+  adds them to your list. Accounts already on a list are not offered. The block
+  stays open after an add, because adding two students in a row is the common
+  case.
+- **The list** — flat and alphabetical in Polish order, with no letter groups.
+  `Ł` is its own letter and sorts after `L`.
+- **Levels** — opens the overall level and the five language skills. See
+  [Levels and skills](#levels-and-skills).
 - **Profile** — opens a short free-text field about the student. A dot on the
   button means a profile has been written, so you can see which students have
   one without opening every panel.
 - **Remove** — takes the student off your list. Their WordPress account is
   untouched.
+
+Neither panel exists until you open it, and closing one removes it from the
+page again. Each row carries what its panels need in `data-` attributes, so the
+panel is built from the row rather than fetched, and a teacher who opens twenty
+students in a session is not left carrying twenty panels. Unsaved edits go with
+the panel when it closes — which is why the status line reads **Not saved yet**
+from the first change until a save succeeds.
 
 ## The level scale
 
@@ -62,8 +79,56 @@ never reaches the database. Anything outside the 25 values is rejected server
 side.
 
 A student with no level opens at B1, not A0 — starting at the bottom would drag
-every new student through "beginner" on the way to their real level. The chip
-stays grey until the slider is actually moved.
+every new student through "beginner" on the way to their real level.
+
+## Levels and skills
+
+The **Levels** panel holds one overall level and five skills, in CEFR
+self-assessment grid order:
+
+| Key | Label | Column |
+|---|---|---|
+| `listening` | Listening | `skill_listening` |
+| `reading` | Reading | `skill_reading` |
+| `spoken_interaction` | Spoken interaction | `skill_spoken_interaction` |
+| `spoken_production` | Spoken production | `skill_spoken_production` |
+| `writing` | Writing | `skill_writing` |
+
+Each skill uses the same 25-value scale, and each may be unset. **Unset is not
+A0.** A skill nobody has assessed reads `—`, and a **Clear** link — shown only
+on a skill that is set — puts it back to that state. An unset skill's slider
+opens at the student's current overall level, or at B1 when there is no overall
+either: that is where the teacher's thumb starts, not a value.
+
+### Where the overall level comes from
+
+By default it is the **average of the skills that are set**, and a badge on the
+panel says so. Unset skills are ignored rather than counted as A0, so three set
+skills average over three and a student with one skill has an overall equal to
+that skill. The average is over slider indices, rounded to the nearest whole
+position.
+
+Moving the **overall** slider takes it over by hand: the badge flips to **Set
+manually**, a **Use average** link appears, and moving a skill no longer moves
+it. **Use average** hands it back and recomputes on the spot — including back to
+"No level set" when no skill is set at all.
+
+Nothing autosaves. One **Save** writes the overall level, the manual flag and
+all five skills as a single request, because seven values that have to agree
+with each other should not be seven chances to end up half-written.
+
+### Written through, not computed on read
+
+When the level is average-derived, the computed average is **written into the
+`level` column** on every save. It is never computed when read.
+
+`TBT_Students::get_level()` is a published contract other plugins call, so the
+column stays the one place the answer lives: no consumer changes, no read-path
+cost, and no second definition of "current level" to drift. The arithmetic lives
+in `TBT_Students_DB::average_of_skills()`. The panel previews the same
+calculation in JavaScript so the readout moves as the teacher drags, but the
+server recomputes it on save and the row repaints from the server's answer — a
+preview is never the thing that gets stored.
 
 ## The student profile
 
@@ -94,12 +159,55 @@ that half-worked would imply a guarantee that does not exist.
   cap change has room. The column arrived in schema version `2`; `dbDelta`
   adds it to an existing install without touching existing rows.
 
+## Schema versions
+
+`TBTSTU_DB_VERSION` is bumped only when the table definition actually changes,
+never as a side effect of a plugin release.
+
+| Version | Change |
+|---|---|
+| `1` | `user_id`, `teacher_id`, `level`, timestamps |
+| `2` | `profile` |
+| `3` | the five `skill_*` columns and `level_manual` |
+
+The skill columns are `VARCHAR(6) NULL DEFAULT NULL` — NULL is "not assessed",
+the same first-class state `level` and `profile` already use. `level_manual` is
+`TINYINT(1) NOT NULL DEFAULT 0`: it is a two-state answer with no third state.
+
+**The 2 → 3 migration** needs one backfill. `dbDelta` adds `level_manual` with a
+default of 0, which means "this level is the average of the skills" — but every
+level that existed before version 3 was typed in by a teacher and has no skills
+behind it to average, so left at 0 each one would read as "No level set" on the
+next page load. So, on an upgrade from a stored version below 3 only:
+
+```sql
+UPDATE {prefix}tbt_students SET level_manual = 1 WHERE level IS NOT NULL
+```
+
+A fresh install stores `3` immediately and skips the backfill. A fresh install
+has no rows anyway; the guard is what makes that true by design rather than by
+luck. Activation runs the same path, because `register_activation_hook` fires on
+a reactivation of an install that is already carrying rows.
+
 ## Public read API
 
 The one supported way for another plugin to ask for a student's level:
 
 ```php
 $level = TBT_Students::get_level( $user_id ); // 'B1.5', or '' if none is set
+```
+
+for the five skills:
+
+```php
+$skills = TBT_Students::get_skills( $user_id );
+// array(
+//   'listening'          => 'B1',
+//   'reading'            => 'B1.5',
+//   'spoken_interaction' => '',   // not assessed
+//   'spoken_production'  => '',
+//   'writing'            => 'A2.7',
+// )
 ```
 
 and for the profile note:
@@ -112,16 +220,23 @@ and the filters behind them, for supplying or overriding the values from
 elsewhere:
 
 ```php
-apply_filters( 'tbt_student_level', $level, $user_id );
+apply_filters( 'tbt_student_level',   $level,   $user_id );
+apply_filters( 'tbt_student_skills',  $skills,  $user_id );
 apply_filters( 'tbt_student_profile', $profile, $user_id );
 ```
 
-Both return `''` for a user who is not a listed student, so a consumer that
-forgets to check gets an empty string rather than a fatal on a null.
+All three return an empty value for a user who is not a listed student, so a
+consumer that forgets to check gets an empty string rather than a fatal on a
+null. `get_skills()` always returns all five keys, so
+`$skills['spoken_interaction']` can be read without an `isset` first.
 
-There is no write API. Levels and profiles are set by a teacher on the page,
-and a second way in would be a second place for the scale and the character cap
-to be enforced.
+`get_level()` returns the overall level whether it came from the average or from
+a teacher setting it by hand. A consumer does not need to know which.
+
+There is no write API. Levels, skills and profiles are set by a teacher on the
+page, and a second way in would be a second place for the scale and the
+character cap to be enforced — and a second place that could write an overall
+level disagreeing with the skills it is supposed to be the average of.
 
 ## Permissions
 
@@ -147,6 +262,9 @@ row.
   `includes/class-tbt-students-ajax.php`.
 - One student belongs to exactly one teacher — `user_id` is the table's primary
   key. Reassigning a student means removing and re-adding them.
+- The filter is client-side over the rows already rendered, so it narrows the
+  page rather than querying. That is the right trade at one teacher's list
+  length and would not be at ten thousand rows.
 
 ## Namespacing
 

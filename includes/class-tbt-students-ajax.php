@@ -21,7 +21,7 @@ class TBT_Students_Ajax {
 	public function __construct() {
 		add_action( 'wp_ajax_tbtstu_search', array( $this, 'search' ) );
 		add_action( 'wp_ajax_tbtstu_add', array( $this, 'add' ) );
-		add_action( 'wp_ajax_tbtstu_set_level', array( $this, 'set_level' ) );
+		add_action( 'wp_ajax_tbtstu_set_levels', array( $this, 'set_levels' ) );
 		add_action( 'wp_ajax_tbtstu_set_profile', array( $this, 'set_profile' ) );
 		add_action( 'wp_ajax_tbtstu_remove', array( $this, 'remove' ) );
 	}
@@ -159,22 +159,57 @@ class TBT_Students_Ajax {
 	}
 
 	/**
-	 * Save a student's level.
+	 * Save a student's overall level, the manual flag and all five skills.
+	 *
+	 * One action, one write. The panel edits seven values that have to agree
+	 * with each other, and five round trips for one Save press is five ways to
+	 * end up half-saved — a level averaged from skills that were never stored.
+	 *
+	 * This class validates and delegates; it does not compute. The average
+	 * lives in TBT_Students_DB::average_of_skills() so there is one definition
+	 * of it, and the client's copy is a preview of that one.
 	 */
-	public function set_level() {
+	public function set_levels() {
 		$this->guard();
 
 		$student_id = $this->requested_student();
-		$level      = isset( $_POST['level'] ) ? sanitize_text_field( wp_unslash( $_POST['level'] ) ) : '';
 
 		if ( ! TBT_Students_DB::user_can_edit_student( $student_id ) ) {
 			wp_send_json_error( array( 'message' => __( 'You are not allowed to edit that student.', 'tbt-students' ) ), 403 );
 		}
 
+		$manual = isset( $_POST['level_manual'] ) ? '1' === (string) sanitize_text_field( wp_unslash( $_POST['level_manual'] ) ) : false;
+		$level  = isset( $_POST['level'] ) ? sanitize_text_field( wp_unslash( $_POST['level'] ) ) : '';
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each value is sanitised below.
+		$submitted = ( isset( $_POST['skills'] ) && is_array( $_POST['skills'] ) ) ? wp_unslash( $_POST['skills'] ) : array();
+
+		// One bad value fails the whole request and nothing is written. A save
+		// that stored four of five skills and refused the fifth would leave the
+		// row in a state the teacher never asked for and cannot see.
+		$skills = array();
+		foreach ( TBT_Students_DB::skill_keys() as $key ) {
+			$value = isset( $submitted[ $key ] ) ? sanitize_text_field( (string) $submitted[ $key ] ) : '';
+			if ( '' !== $value && ! TBT_Students_DB::is_valid_level( $value ) ) {
+				wp_send_json_error(
+					array(
+						'message' => __( 'That is not a valid level.', 'tbt-students' ),
+						'code'    => 'tbtstu_bad_level',
+					),
+					400
+				);
+			}
+			$skills[ $key ] = $value;
+		}
+
 		// Validated against the canonical list, not against a pattern: the
 		// scale has a hole in it by design (there is no C2.3), and a regex
-		// that accepts "any band plus any step" would let that hole through.
-		if ( ! TBT_Students_DB::is_valid_level( $level ) ) {
+		// that accepted "any band plus any step" would let that hole through.
+		//
+		// Only when the flag is set. With the flag clear the submitted level is
+		// the client's preview of the average, and the server recomputes it
+		// rather than trusting it — so there is nothing here to validate.
+		if ( $manual && '' !== $level && ! TBT_Students_DB::is_valid_level( $level ) ) {
 			wp_send_json_error(
 				array(
 					'message' => __( 'That is not a valid level.', 'tbt-students' ),
@@ -184,7 +219,7 @@ class TBT_Students_Ajax {
 			);
 		}
 
-		$saved = TBT_Students_DB::set_level( $student_id, $level );
+		$saved = TBT_Students_DB::set_levels( $student_id, $level, $manual, $skills );
 		if ( is_wp_error( $saved ) ) {
 			wp_send_json_error(
 				array(
@@ -195,7 +230,10 @@ class TBT_Students_Ajax {
 			);
 		}
 
-		wp_send_json_success( array( 'level' => $level ) );
+		// The values the row now actually holds, so the panel and the chip
+		// repaint from the server's answer rather than from what they hoped
+		// they sent.
+		wp_send_json_success( $saved );
 	}
 
 	/**

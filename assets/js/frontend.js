@@ -1,8 +1,17 @@
 /* TBT Students — frontend page. Vanilla JS, no jQuery.
 
-   The 25-value scale and the band names are NOT written out here: they arrive
-   from PHP through wp_localize_script, so the client cannot drift from the
-   server's idea of what a valid level is. */
+   The 25-value scale, the band names and the five skills are NOT written out
+   here: they arrive from PHP through wp_localize_script, so the client cannot
+   drift from the server's idea of what a valid level is, or of what a skill is.
+
+   Two things this file owns that the server cannot:
+
+   - Filtering. Pure client-side over rows already in the DOM. No request, no
+     server state, and no wait between a keystroke and the list narrowing.
+   - The panels. Nothing renders a level or profile panel until the teacher
+     opens one, and closing it removes it again. A teacher who opens twenty
+     students in a session should not be carrying twenty panels; the row holds
+     the data, and rebuilding from it is cheap. */
 ( function () {
 	'use strict';
 
@@ -11,11 +20,20 @@
 	var LEVELS = cfg.levels || [];
 	var BANDS = cfg.bands || [];
 	var BAND_NAMES = cfg.bandNames || {};
+	/* Skill key => label, in CEFR grid order. Object key order is insertion
+	   order for string keys, and PHP hands them over in grid order, so the
+	   panel rows come out in the order the grid is read in. */
+	var SKILLS = cfg.skills || {};
+	var SKILL_KEYS = Object.keys( SKILLS );
 	/* wp_localize_script stringifies every scalar it passes, so this arrives
 	   as "12", not 12. Coerced once here rather than at each use. */
 	var DEFAULT_INDEX = Number( cfg.defaultIndex ) || 0;
 	var PROFILE_MAX = Number( cfg.profileMax ) || 300;
 	var SEARCH_DEBOUNCE = 250;
+
+	/* What an unset skill reads as. An em dash, not "A0" and not an empty
+	   space: "not assessed" is a state, and it has to look like one. */
+	var NONE = '—';
 
 	/* Polish ordering for rows this script inserts, so a student added at
 	   4pm lands where a page reload would have put them. The browser's own
@@ -113,9 +131,96 @@
 		return String( template || '%s' ).replace( '%s', value );
 	}
 
+	/**
+	 * Where a level sits on the slider, falling back to the default opening
+	 * position for anything that is not one of the 25 — '' included.
+	 */
 	function indexOfLevel( level ) {
 		var index = LEVELS.indexOf( level );
 		return index === -1 ? DEFAULT_INDEX : index;
+	}
+
+	/**
+	 * The overall level implied by a set of skills.
+	 *
+	 * A preview of TBT_Students_DB::average_of_skills(), and it must produce
+	 * the same answer: same "ignore the unset ones" rule, same rounding. PHP's
+	 * round() is half away from zero and Math.round() is half up, which agree
+	 * for the non-negative indices this ever sees. A preview that disagrees
+	 * with what gets stored is worse than no preview — the server recomputes
+	 * this on every save, and the row repaints from its answer.
+	 *
+	 * @param {Object} skills Skill key => level, '' for unset.
+	 * @return {string} One of the 25 levels, or '' when no skill is set.
+	 */
+	function averageOfSkills( skills ) {
+		var indices = [];
+
+		SKILL_KEYS.forEach( function ( key ) {
+			var level = skills[ key ] || '';
+			if ( '' === level ) {
+				return;
+			}
+			var index = LEVELS.indexOf( level );
+			if ( index !== -1 ) {
+				indices.push( index );
+			}
+		} );
+
+		if ( ! indices.length ) {
+			return '';
+		}
+
+		var sum = indices.reduce( function ( total, index ) {
+			return total + index;
+		}, 0 );
+		var average = Math.round( sum / indices.length );
+		average = Math.max( 0, Math.min( LEVELS.length - 1, average ) );
+
+		return LEVELS[ average ];
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * Row data
+	 *
+	 * The row is the record while the page is open: the panels are built from
+	 * it and thrown away, so everything they need lives here.
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * The attribute a skill's level rides in. Mirrors
+	 * TBT_Students_Frontend::skill_attribute().
+	 */
+	function skillAttribute( key ) {
+		return 'data-skill-' + key.replace( /_/g, '-' );
+	}
+
+	function rowLevel( row ) {
+		return row.getAttribute( 'data-level' ) || '';
+	}
+
+	function rowManual( row ) {
+		return '1' === row.getAttribute( 'data-level-manual' );
+	}
+
+	function rowSkills( row ) {
+		var skills = {};
+		SKILL_KEYS.forEach( function ( key ) {
+			skills[ key ] = row.getAttribute( skillAttribute( key ) ) || '';
+		} );
+		return skills;
+	}
+
+	function nameOf( row ) {
+		var name = row.querySelector( '.tbtstu-student-name' );
+		return name ? name.textContent : '';
+	}
+
+	function compare( a, b ) {
+		if ( collator ) {
+			return collator.compare( a, b );
+		}
+		return String( a ).localeCompare( String( b ), 'pl' );
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -123,20 +228,30 @@
 	 * ------------------------------------------------------------------ */
 
 	function init( app ) {
-		var search = app.querySelector( '[data-role="search"]' );
-		var results = app.querySelector( '[data-role="results"]' );
-		var list = app.querySelector( '[data-role="list"]' );
-		var empty = app.querySelector( '[data-role="empty"]' );
-		var error = app.querySelector( '[data-role="error"]' );
+		var ui = {
+			app: app,
+			search: app.querySelector( '[data-role="search"]' ),
+			results: app.querySelector( '[data-role="results"]' ),
+			list: app.querySelector( '[data-role="list"]' ),
+			empty: app.querySelector( '[data-role="empty"]' ),
+			error: app.querySelector( '[data-role="error"]' ),
+			filter: app.querySelector( '[data-role="filter"]' ),
+			noLevel: app.querySelector( '[data-role="filter-nolevel"]' ),
+			count: app.querySelector( '[data-role="filter-count"]' ),
+			addToggle: app.querySelector( '[data-role="add-toggle"]' ),
+			addPanel: app.querySelector( '.tbtstu-add' )
+		};
 
-		initSearch( { app: app, search: search, results: results, list: list, empty: empty, error: error } );
+		initFilter( ui );
+		initAddToggle( ui );
+		initSearch( ui );
 
-		// Delegated, so rows added after load behave like the rendered ones
-		// without a second binding pass.
-		list.addEventListener( 'click', function ( event ) {
+		// Delegated, so rows added after load — and panels built after that —
+		// behave like the rendered ones without a second binding pass.
+		ui.list.addEventListener( 'click', function ( event ) {
 			var levelButton = event.target.closest( '[data-role="level"]' );
 			if ( levelButton ) {
-				togglePanel( levelButton.closest( '.tbtstu-student' ) );
+				toggleLevelPanel( levelButton.closest( '.tbtstu-student' ) );
 				return;
 			}
 			var profileButton = event.target.closest( '[data-role="profile"]' );
@@ -144,24 +259,44 @@
 				toggleProfilePanel( profileButton.closest( '.tbtstu-student' ) );
 				return;
 			}
-			var saveButton = event.target.closest( '[data-role="profile-save"]' );
-			if ( saveButton ) {
-				// An explicit Save, like the level panel. Nothing about a
-				// profile is saved by looking away from it.
-				saveProfile( saveButton.closest( '.tbtstu-student' ) );
+			var useAverage = event.target.closest( '[data-role="use-average"]' );
+			if ( useAverage ) {
+				setManual( useAverage.closest( '[data-role="panel"]' ), false );
+				return;
+			}
+			var clearSkill = event.target.closest( '[data-role="skill-clear"]' );
+			if ( clearSkill ) {
+				clearSkillValue( clearSkill.closest( '.tbtstu-skill' ) );
+				return;
+			}
+			var levelsSave = event.target.closest( '[data-role="levels-save"]' );
+			if ( levelsSave ) {
+				// An explicit Save, like the profile panel. Nothing about a
+				// level is saved by dragging past it any more: the overall and
+				// the five skills go up together or not at all.
+				saveLevels( levelsSave.closest( '.tbtstu-student' ), ui );
+				return;
+			}
+			var profileSave = event.target.closest( '[data-role="profile-save"]' );
+			if ( profileSave ) {
+				saveProfile( profileSave.closest( '.tbtstu-student' ) );
 				return;
 			}
 			var removeButton = event.target.closest( '[data-role="remove"]' );
 			if ( removeButton ) {
-				removeStudent( removeButton.closest( '.tbtstu-student' ), list, empty, error );
+				removeStudent( removeButton.closest( '.tbtstu-student' ), ui );
 			}
 		} );
 
-		list.addEventListener( 'input', function ( event ) {
-			var range = event.target.closest( '[data-role="range"]' );
-			if ( range ) {
-				// Live feedback only — nothing is saved on the way past.
-				paint( range.closest( '.tbtstu-student' ), Number( range.value ), true );
+		ui.list.addEventListener( 'input', function ( event ) {
+			var overall = event.target.closest( '[data-role="range"]' );
+			if ( overall ) {
+				moveOverall( overall );
+				return;
+			}
+			var skill = event.target.closest( '[data-role="skill-range"]' );
+			if ( skill ) {
+				moveSkill( skill );
 				return;
 			}
 			var textarea = event.target.closest( '[data-role="profile-text"]' );
@@ -169,20 +304,114 @@
 				paintCount( textarea.closest( '.tbtstu-student' ) );
 			}
 		} );
-
-		list.addEventListener( 'change', function ( event ) {
-			var range = event.target.closest( '[data-role="range"]' );
-			if ( range ) {
-				// `change` fires on pointer release, so dragging the whole
-				// scale is one request rather than twenty-five.
-				saveLevel( range.closest( '.tbtstu-student' ), Number( range.value ) );
-			}
-		} );
 	}
 
 	/* ------------------------------------------------------------------ *
-	 * Search and add
+	 * The filter
+	 *
+	 * Client-side over rows already on the page. Non-matching rows get the
+	 * `hidden` attribute, which tokens.css pins against Divi's `display`.
 	 * ------------------------------------------------------------------ */
+
+	function initFilter( ui ) {
+		if ( ! ui.filter ) {
+			return;
+		}
+
+		ui.filter.addEventListener( 'input', function () {
+			applyFilter( ui );
+		} );
+
+		ui.noLevel.addEventListener( 'click', function () {
+			var on = 'true' === ui.noLevel.getAttribute( 'aria-pressed' );
+			ui.noLevel.setAttribute( 'aria-pressed', on ? 'false' : 'true' );
+			ui.noLevel.classList.toggle( 'is-on', ! on );
+			applyFilter( ui );
+		} );
+
+		// Run once at load so the count, the empty state and the rows are all
+		// decided in one place rather than half here and half in PHP.
+		applyFilter( ui );
+	}
+
+	/**
+	 * Show the rows that match, hide the rest, and say how many that is.
+	 *
+	 * A row that is open stays open while it is hidden. Reappearing with its
+	 * panel still open is correct: nothing was closed behind the teacher's
+	 * back, and a panel they were part-way through editing is not something a
+	 * keystroke in the filter box should throw away.
+	 */
+	function applyFilter( ui ) {
+		if ( ! ui.filter ) {
+			return;
+		}
+
+		// Lower-cased but NOT accent-folded: a teacher who types Ł means Ł, and
+		// folding it to L would hand them back every Lukasz on the list.
+		var term = ui.filter.value.trim().toLowerCase();
+		var onlyNoLevel = 'true' === ui.noLevel.getAttribute( 'aria-pressed' );
+		var rows = ui.list.querySelectorAll( '.tbtstu-student' );
+		var shown = 0;
+
+		Array.prototype.forEach.call( rows, function ( row ) {
+			var match = true;
+
+			if ( '' !== term ) {
+				var name = nameOf( row ).toLowerCase();
+				var email = ( row.getAttribute( 'data-email' ) || '' ).toLowerCase();
+				match = name.indexOf( term ) !== -1 || email.indexOf( term ) !== -1;
+			}
+
+			// AND, not OR: the toggle narrows what the box already found.
+			if ( match && onlyNoLevel ) {
+				match = '' === rowLevel( row );
+			}
+
+			row.hidden = ! match;
+			if ( match ) {
+				shown++;
+			}
+		} );
+
+		ui.count.textContent = String( i18n.countLine || '%1$d of %2$d students' )
+			.replace( '%1$d', shown )
+			.replace( '%2$d', rows.length );
+
+		// One element, two states. "No students yet" is a teacher who has added
+		// nobody; "No students match" is a filter hiding everyone.
+		if ( ! rows.length ) {
+			ui.empty.textContent = i18n.noStudents;
+			ui.empty.hidden = false;
+		} else if ( ! shown ) {
+			ui.empty.textContent = i18n.noMatch;
+			ui.empty.hidden = false;
+		} else {
+			ui.empty.hidden = true;
+		}
+	}
+
+	/* ------------------------------------------------------------------ *
+	 * Add a student
+	 * ------------------------------------------------------------------ */
+
+	function initAddToggle( ui ) {
+		if ( ! ui.addToggle || ! ui.addPanel ) {
+			return;
+		}
+
+		ui.addToggle.addEventListener( 'click', function () {
+			var opening = ui.addPanel.hidden;
+			ui.addPanel.hidden = ! opening;
+			ui.addToggle.setAttribute( 'aria-expanded', opening ? 'true' : 'false' );
+			ui.addToggle.textContent = opening ? i18n.addHide : i18n.addShow;
+			if ( opening ) {
+				ui.search.focus();
+			} else {
+				hideResults( ui );
+			}
+		} );
+	}
 
 	function initSearch( ui ) {
 		var timer = null;
@@ -287,9 +516,12 @@
 
 		post( 'tbtstu_add', { student_id: userId } ).then( function ( data ) {
 			insertStudent( ui.list, data.student );
-			ui.empty.hidden = true;
 			ui.search.value = '';
 			hideResults( ui );
+			// The block stays open on purpose: adding two students in a row is
+			// the common case, and collapsing after each one would make the
+			// second add cost a click that the first did not.
+			applyFilter( ui );
 		} ).catch( function ( err ) {
 			showError( ui.error, err.message );
 		} );
@@ -301,19 +533,26 @@
 
 	/**
 	 * Build one student row, matching what PHP renders for the same student.
+	 *
+	 * Panels are not part of it — on either side. The row carries the data and
+	 * the panel builders below are shared by both paths, so a row added at 4pm
+	 * and the same row after a reload open to exactly the same thing.
 	 */
 	function buildRow( student ) {
 		var row = document.createElement( 'div' );
 		row.className = 'tbtstu-student';
 		row.setAttribute( 'data-student-id', student.user_id );
+		row.setAttribute( 'data-email', student.email || '' );
 		row.setAttribute( 'data-level', student.level || '' );
+		row.setAttribute( 'data-level-manual', Number( student.level_manual ) ? '1' : '0' );
 		row.setAttribute( 'data-profile', student.profile || '' );
 
-		var panelId = 'tbtstu-panel-' + student.user_id;
-		var profileId = 'tbtstu-profile-' + student.user_id;
-		var profileFieldId = 'tbtstu-profile-text-' + student.user_id;
+		var skills = student.skills || {};
+		SKILL_KEYS.forEach( function ( key ) {
+			row.setAttribute( skillAttribute( key ), skills[ key ] || '' );
+		} );
+
 		var hasLevel = !! student.level;
-		var index = hasLevel ? indexOfLevel( student.level ) : DEFAULT_INDEX;
 
 		var main = document.createElement( 'div' );
 		main.className = 'tbtstu-student-main';
@@ -341,15 +580,15 @@
 		levelButton.className = 'tbtstu-btn';
 		levelButton.setAttribute( 'data-role', 'level' );
 		levelButton.setAttribute( 'aria-expanded', 'false' );
-		levelButton.setAttribute( 'aria-controls', panelId );
-		levelButton.textContent = i18n.level;
+		levelButton.setAttribute( 'aria-controls', 'tbtstu-panel-' + student.user_id );
+		levelButton.textContent = i18n.levels;
 
 		var profileButton = document.createElement( 'button' );
 		profileButton.type = 'button';
 		profileButton.className = 'tbtstu-btn';
 		profileButton.setAttribute( 'data-role', 'profile' );
 		profileButton.setAttribute( 'aria-expanded', 'false' );
-		profileButton.setAttribute( 'aria-controls', profileId );
+		profileButton.setAttribute( 'aria-controls', 'tbtstu-profile-' + student.user_id );
 		profileButton.appendChild( document.createTextNode( i18n.profile ) );
 
 		// The marker a teacher reads across the list — see the PHP row for
@@ -375,281 +614,91 @@
 		actions.appendChild( removeButton );
 		main.appendChild( body );
 		main.appendChild( actions );
-
-		var panel = document.createElement( 'div' );
-		panel.className = 'tbtstu-level';
-		panel.id = panelId;
-		panel.setAttribute( 'data-role', 'panel' );
-		panel.hidden = true;
-
-		var readout = document.createElement( 'p' );
-		readout.className = 'tbtstu-readout';
-		var code = document.createElement( 'span' );
-		code.className = 'tbtstu-readout-code';
-		code.setAttribute( 'data-role', 'readout-code' );
-		var phrase = document.createElement( 'span' );
-		phrase.className = 'tbtstu-readout-phrase';
-		phrase.setAttribute( 'data-role', 'readout-phrase' );
-		readout.appendChild( code );
-		readout.appendChild( phrase );
-
-		var range = document.createElement( 'input' );
-		range.type = 'range';
-		range.className = 'tbtstu-range';
-		range.setAttribute( 'data-role', 'range' );
-		range.min = '0';
-		range.max = String( LEVELS.length - 1 );
-		range.step = '1';
-		range.value = String( index );
-		range.setAttribute( 'aria-label', i18n.levelAria );
-
-		var ticks = document.createElement( 'div' );
-		ticks.className = 'tbtstu-ticks';
-		BANDS.forEach( function ( band, i ) {
-			var tick = document.createElement( 'span' );
-			tick.className = 'tbtstu-tick';
-			tick.style.left = ( i / ( BANDS.length - 1 ) * 100 ) + '%';
-			tick.textContent = band;
-			ticks.appendChild( tick );
-		} );
-
-		var status = document.createElement( 'p' );
-		status.className = 'tbtstu-status';
-		status.setAttribute( 'data-role', 'status' );
-		status.setAttribute( 'aria-live', 'polite' );
-
-		panel.appendChild( readout );
-		panel.appendChild( range );
-		panel.appendChild( ticks );
-		panel.appendChild( status );
-
 		row.appendChild( main );
-		row.appendChild( panel );
-		row.appendChild( buildProfilePanel( student, profileId, profileFieldId ) );
 
 		return row;
 	}
 
 	/**
-	 * The profile panel, matching what PHP renders for the same student.
+	 * Put a new row where a page reload would have put it.
 	 *
-	 * Both hints are built here, unconditionally and outside any toggle: the
-	 * privacy rule is what makes the field lawful to use, so it is never a
-	 * tooltip and never something the panel can be in a state without.
-	 */
-	function buildProfilePanel( student, profileId, fieldId ) {
-		var panel = document.createElement( 'div' );
-		panel.className = 'tbtstu-profile';
-		panel.id = profileId;
-		panel.setAttribute( 'data-role', 'profile-panel' );
-		panel.hidden = true;
-
-		var label = document.createElement( 'label' );
-		label.className = 'tbtstu-label';
-		label.setAttribute( 'for', fieldId );
-		label.textContent = i18n.profileLabel;
-
-		var textarea = document.createElement( 'textarea' );
-		textarea.className = 'tbtstu-textarea';
-		textarea.id = fieldId;
-		textarea.setAttribute( 'data-role', 'profile-text' );
-		textarea.rows = 3;
-		textarea.maxLength = PROFILE_MAX;
-		textarea.value = student.profile || '';
-
-		var hint = document.createElement( 'p' );
-		hint.className = 'tbtstu-help';
-		hint.textContent = i18n.profileHint;
-
-		var use = document.createElement( 'p' );
-		use.className = 'tbtstu-help';
-		use.textContent = i18n.profileUse;
-
-		var foot = document.createElement( 'div' );
-		foot.className = 'tbtstu-profile-foot';
-
-		var count = document.createElement( 'span' );
-		count.className = 'tbtstu-count';
-		count.setAttribute( 'data-role', 'profile-count' );
-		count.textContent = countLabel( ( student.profile || '' ).length );
-
-		var save = document.createElement( 'button' );
-		save.type = 'button';
-		save.className = 'tbtstu-btn';
-		save.setAttribute( 'data-role', 'profile-save' );
-		save.textContent = i18n.save;
-
-		foot.appendChild( count );
-		foot.appendChild( save );
-
-		var status = document.createElement( 'p' );
-		status.className = 'tbtstu-status';
-		status.setAttribute( 'data-role', 'profile-status' );
-		status.setAttribute( 'aria-live', 'polite' );
-
-		panel.appendChild( label );
-		panel.appendChild( textarea );
-		panel.appendChild( hint );
-		panel.appendChild( use );
-		panel.appendChild( foot );
-		panel.appendChild( status );
-
-		return panel;
-	}
-
-	/**
-	 * Put a new row where a page reload would have put it: inside its letter
-	 * group, in Polish order, creating the group if it is the first name
-	 * under that letter.
+	 * The list is flat now, so this is one walk down it comparing names under
+	 * the browser's Polish collator. It is a client-side insert position only:
+	 * a reload re-sorts through PHP, which stays authoritative.
 	 */
 	function insertStudent( list, student ) {
 		var row = buildRow( student );
-		var letter = student.letter || '#';
-		var group = list.querySelector( '.tbtstu-group[data-letter="' + cssEscape( letter ) + '"]' );
-
-		if ( ! group ) {
-			group = buildGroup( letter );
-			var followingGroup = Array.prototype.find.call(
-				list.querySelectorAll( '.tbtstu-group' ),
-				function ( candidate ) {
-					return compareLetters( candidate.getAttribute( 'data-letter' ), letter ) > 0;
-				}
-			);
-			list.insertBefore( group, followingGroup || null );
-		}
 
 		var following = Array.prototype.find.call(
-			group.querySelectorAll( '.tbtstu-student' ),
+			list.querySelectorAll( '.tbtstu-student' ),
 			function ( candidate ) {
 				return compare( nameOf( candidate ), student.display_name ) > 0;
 			}
 		);
-		group.insertBefore( row, following || null );
-	}
 
-	function buildGroup( letter ) {
-		var group = document.createElement( 'section' );
-		group.className = 'tbtstu-group';
-		group.setAttribute( 'data-letter', letter );
-
-		var head = document.createElement( 'div' );
-		head.className = 'tbtstu-group-head';
-
-		var name = document.createElement( 'span' );
-		name.className = 'tbtstu-group-letter';
-		name.textContent = letter;
-
-		var rule = document.createElement( 'span' );
-		rule.className = 'tbtstu-rule';
-
-		head.appendChild( name );
-		head.appendChild( rule );
-		group.appendChild( head );
-
-		return group;
-	}
-
-	function nameOf( row ) {
-		var name = row.querySelector( '.tbtstu-student-name' );
-		return name ? name.textContent : '';
-	}
-
-	function compare( a, b ) {
-		if ( collator ) {
-			return collator.compare( a, b );
-		}
-		return a < b ? -1 : ( a > b ? 1 : 0 );
-	}
-
-	/**
-	 * Group letters, with "#" pinned last.
-	 *
-	 * PHP puts the non-letter group at the bottom of the page; ICU would sort
-	 * "#" above A and slot a new letter group underneath it. Same rule on both
-	 * sides, so a row added now and the same row after a reload land in the
-	 * same place.
-	 */
-	function compareLetters( a, b ) {
-		if ( a === b ) {
-			return 0;
-		}
-		if ( '#' === a ) {
-			return 1;
-		}
-		if ( '#' === b ) {
-			return -1;
-		}
-		return compare( a, b );
-	}
-
-	/**
-	 * The group letter goes into a selector, and it can be a diacritic or a
-	 * "#". CSS.escape where the browser has it, quoted fallback where it does
-	 * not.
-	 */
-	function cssEscape( value ) {
-		if ( window.CSS && window.CSS.escape ) {
-			return window.CSS.escape( value );
-		}
-		return String( value ).replace( /["\\]/g, '\\$&' );
+		list.insertBefore( row, following || null );
 	}
 
 	/* ------------------------------------------------------------------ *
-	 * The level panel
+	 * Shared panel parts
 	 * ------------------------------------------------------------------ */
 
-	/**
-	 * Open or close one panel and keep its button's aria-expanded honest.
-	 * Both panels use this, so they cannot drift apart.
-	 */
-	function setPanel( button, panel, open ) {
-		panel.hidden = ! open;
-		button.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
-	}
-
-	function togglePanel( row ) {
-		var panel = row.querySelector( '[data-role="panel"]' );
-		var button = row.querySelector( '[data-role="level"]' );
-		var opening = panel.hidden;
-
-		setPanel( button, panel, opening );
-
-		if ( opening ) {
-			var range = row.querySelector( '[data-role="range"]' );
-			// A student with no level opens at B1, not at A0: starting at the
-			// bottom would drag every new student through "beginner" on the
-			// way to their real level. The chip stays grey until the slider
-			// actually moves — see paint().
-			paint( row, Number( range.value ), false );
-			status( row, '' );
+	function make( tag, className, role ) {
+		var node = document.createElement( tag );
+		if ( className ) {
+			node.className = className;
 		}
+		if ( role ) {
+			node.setAttribute( 'data-role', role );
+		}
+		return node;
 	}
 
 	/**
-	 * Repaint the readout, the track fill and — once the teacher has moved
-	 * the slider — the chip.
-	 *
-	 * @param {Element} row      The student row.
-	 * @param {number}  index    Slider position.
-	 * @param {boolean} touched  True when this came from the teacher moving
-	 *                           the slider, false when the panel merely
-	 *                           opened.
+	 * Seven ticks at i/6 of the track — the legend names where each band
+	 * STARTS, and A0…C1 each start four positions apart with C2 last.
 	 */
-	function paint( row, index, touched ) {
-		var level = LEVELS[ index ];
-		if ( ! level ) {
+	function buildTicks() {
+		var ticks = make( 'div', 'tbtstu-ticks' );
+		BANDS.forEach( function ( band, i ) {
+			var tick = make( 'span', 'tbtstu-tick' );
+			tick.style.left = ( i / ( BANDS.length - 1 ) * 100 ) + '%';
+			tick.textContent = band;
+			ticks.appendChild( tick );
+		} );
+		return ticks;
+	}
+
+	/**
+	 * step="1" over 0–24 is what makes an invalid level unreachable from the
+	 * UI: there is no position on this track that is not one of the 25. The
+	 * server re-validates anyway.
+	 */
+	function buildRange( className, role, index, label ) {
+		var range = document.createElement( 'input' );
+		range.type = 'range';
+		range.className = className;
+		range.setAttribute( 'data-role', role );
+		range.min = '0';
+		range.max = String( LEVELS.length - 1 );
+		range.step = '1';
+		range.value = String( index );
+		range.setAttribute( 'aria-label', label );
+		return range;
+	}
+
+	function setFill( range ) {
+		var index = Number( range.value );
+		range.style.setProperty( '--tbtstu-fill', ( index / ( LEVELS.length - 1 ) * 100 ) + '%' );
+	}
+
+	function statusLine( row, role, message, isError ) {
+		var element = row.querySelector( '[data-role="' + role + '"]' );
+		if ( ! element ) {
 			return;
 		}
-
-		row.querySelector( '[data-role="readout-code"]' ).textContent = level;
-		row.querySelector( '[data-role="readout-phrase"]' ).textContent = phraseFor( level );
-
-		var range = row.querySelector( '[data-role="range"]' );
-		range.style.setProperty( '--tbtstu-fill', ( index / ( LEVELS.length - 1 ) * 100 ) + '%' );
-
-		if ( touched ) {
-			setChip( row, level );
-		}
+		element.textContent = message || '';
+		element.classList.toggle( 'is-error', !! isError );
 	}
 
 	function setChip( row, level ) {
@@ -663,38 +712,322 @@
 		}
 	}
 
-	function saveLevel( row, index ) {
-		var level = LEVELS[ index ];
-		if ( ! level ) {
+	/* ------------------------------------------------------------------ *
+	 * The levels panel
+	 *
+	 * Built on first open from the row's data attributes, and removed from the
+	 * DOM on close rather than hidden. Unsaved edits die with it — which is
+	 * acceptable only because the panel closes when the teacher clicks the
+	 * button that closes it, and because the status line says "Not saved yet"
+	 * from the first edit until a save succeeds.
+	 * ------------------------------------------------------------------ */
+
+	function toggleLevelPanel( row ) {
+		var existing = row.querySelector( '[data-role="panel"]' );
+		var button = row.querySelector( '[data-role="level"]' );
+
+		if ( existing ) {
+			existing.remove();
+			button.setAttribute( 'aria-expanded', 'false' );
 			return;
 		}
 
-		var previous = row.getAttribute( 'data-level' ) || '';
-		status( row, i18n.saving );
+		var panel = buildLevelPanel( row );
+		// Before the profile panel when that one is already open, so the two
+		// keep the order they had when the server rendered both.
+		row.insertBefore( panel, row.querySelector( '[data-role="profile-panel"]' ) );
+		button.setAttribute( 'aria-expanded', 'true' );
 
-		post( 'tbtstu_set_level', {
-			student_id: row.getAttribute( 'data-student-id' ),
-			level: level
-		} ).then( function ( data ) {
-			row.setAttribute( 'data-level', data.level );
-			setChip( row, data.level );
-			status( row, i18n.saved );
-		} ).catch( function ( err ) {
-			// The chip is showing a level that was never saved, so put the
-			// stored one back rather than leaving the teacher looking at a
-			// value the database does not have.
-			setChip( row, previous );
-			var range = row.querySelector( '[data-role="range"]' );
-			range.value = String( previous ? indexOfLevel( previous ) : DEFAULT_INDEX );
-			paint( row, Number( range.value ), !! previous );
-			status( row, err.message, true );
-		} );
+		paintOverall( panel );
 	}
 
-	function status( row, message, isError ) {
-		var element = row.querySelector( '[data-role="status"]' );
-		element.textContent = message || '';
-		element.classList.toggle( 'is-error', !! isError );
+	/**
+	 * The panel's own working copy of the row's values.
+	 *
+	 * `data-level` is the overall the panel currently shows ('' for none), and
+	 * `data-manual` says where it came from. They are not the row's attributes:
+	 * those stay at what the database holds until a save comes back.
+	 */
+	function buildLevelPanel( row ) {
+		var studentId = row.getAttribute( 'data-student-id' );
+		var level = rowLevel( row );
+		var manual = rowManual( row );
+		var skills = rowSkills( row );
+
+		var panel = make( 'div', 'tbtstu-level', 'panel' );
+		panel.id = 'tbtstu-panel-' + studentId;
+		panel.setAttribute( 'data-level', level );
+		panel.setAttribute( 'data-manual', manual ? '1' : '0' );
+
+		var overallLabel = make( 'p', 'tbtstu-label' );
+		overallLabel.textContent = i18n.overallLevel;
+
+		var head = make( 'div', 'tbtstu-level-head' );
+
+		var readout = make( 'p', 'tbtstu-readout' );
+		readout.appendChild( make( 'span', 'tbtstu-readout-code', 'readout-code' ) );
+		readout.appendChild( make( 'span', 'tbtstu-readout-phrase', 'readout-phrase' ) );
+
+		var badge = make( 'span', 'tbtstu-badge', 'badge' );
+
+		// A button, not a link: it changes this panel rather than going
+		// anywhere, and an anchor with no destination is a worse thing to hand
+		// a keyboard than a button asked to look calm.
+		var useAverage = make( 'button', 'tbtstu-usavg', 'use-average' );
+		useAverage.type = 'button';
+		useAverage.textContent = i18n.useAverage;
+
+		head.appendChild( readout );
+		head.appendChild( badge );
+		head.appendChild( useAverage );
+
+		var range = buildRange( 'tbtstu-range', 'range', indexOfLevel( level ), i18n.levelAria );
+
+		var skillsLabel = make( 'p', 'tbtstu-label' );
+		skillsLabel.textContent = i18n.languageSkills;
+
+		var grid = make( 'div', 'tbtstu-skills' );
+		SKILL_KEYS.forEach( function ( key ) {
+			grid.appendChild( buildSkill( key, skills[ key ], level ) );
+		} );
+
+		var foot = make( 'div', 'tbtstu-level-foot' );
+		var save = make( 'button', 'tbtstu-btn', 'levels-save' );
+		save.type = 'button';
+		save.textContent = i18n.save;
+		foot.appendChild( save );
+
+		var status = make( 'p', 'tbtstu-status', 'status' );
+		status.setAttribute( 'aria-live', 'polite' );
+
+		panel.appendChild( overallLabel );
+		panel.appendChild( head );
+		panel.appendChild( range );
+		panel.appendChild( buildTicks() );
+		panel.appendChild( make( 'div', 'tbtstu-divider' ) );
+		panel.appendChild( skillsLabel );
+		panel.appendChild( grid );
+		panel.appendChild( foot );
+		panel.appendChild( status );
+
+		return panel;
+	}
+
+	/**
+	 * One skill row: label, half-height slider, value, Clear.
+	 *
+	 * An unset skill's slider opens at the student's current overall level, or
+	 * at B1 when there is no overall either. The `—` readout and the hidden
+	 * Clear link are what mark it unset; the slider position is a starting
+	 * point for the teacher's thumb, not a value.
+	 */
+	function buildSkill( key, value, overall ) {
+		var wrap = make( 'div', 'tbtstu-skill' );
+		wrap.setAttribute( 'data-skill', key );
+		wrap.setAttribute( 'data-value', value || '' );
+
+		var label = make( 'span', 'tbtstu-skill-label' );
+		label.textContent = SKILLS[ key ];
+
+		var start = value ? indexOfLevel( value ) : indexOfLevel( overall );
+		var range = buildRange(
+			'tbtstu-range tbtstu-range--skill',
+			'skill-range',
+			start,
+			format( i18n.skillAria, SKILLS[ key ] )
+		);
+
+		var readout = make( 'span', 'tbtstu-skill-value', 'skill-value' );
+
+		var clear = make( 'button', 'tbtstu-skill-clear', 'skill-clear' );
+		clear.type = 'button';
+		clear.textContent = i18n.clear;
+		clear.setAttribute( 'aria-label', format( i18n.clearSkill, SKILLS[ key ] ) );
+
+		wrap.appendChild( label );
+		wrap.appendChild( range );
+		wrap.appendChild( readout );
+		wrap.appendChild( clear );
+
+		paintSkill( wrap );
+
+		return wrap;
+	}
+
+	function panelSkills( panel ) {
+		var skills = {};
+		SKILL_KEYS.forEach( function ( key ) {
+			var wrap = panel.querySelector( '.tbtstu-skill[data-skill="' + key + '"]' );
+			skills[ key ] = wrap ? ( wrap.getAttribute( 'data-value' ) || '' ) : '';
+		} );
+		return skills;
+	}
+
+	function paintSkill( wrap ) {
+		var value = wrap.getAttribute( 'data-value' ) || '';
+		var readout = wrap.querySelector( '[data-role="skill-value"]' );
+		var clear = wrap.querySelector( '[data-role="skill-clear"]' );
+		var range = wrap.querySelector( '[data-role="skill-range"]' );
+
+		readout.textContent = value || NONE;
+		readout.classList.toggle( 'tbtstu-skill-value--none', '' === value );
+		clear.hidden = '' === value;
+		setFill( range );
+	}
+
+	/**
+	 * Repaint the overall half of the panel from its working copy, and the
+	 * row's chip with it.
+	 */
+	function paintOverall( panel ) {
+		var row = panel.closest( '.tbtstu-student' );
+		var level = panel.getAttribute( 'data-level' ) || '';
+		var manual = '1' === panel.getAttribute( 'data-manual' );
+		var range = panel.querySelector( '[data-role="range"]' );
+
+		panel.querySelector( '[data-role="readout-code"]' ).textContent = level || NONE;
+		panel.querySelector( '[data-role="readout-phrase"]' ).textContent = level ? phraseFor( level ) : '';
+
+		if ( level ) {
+			range.value = String( indexOfLevel( level ) );
+		}
+		setFill( range );
+
+		var badge = panel.querySelector( '[data-role="badge"]' );
+		badge.textContent = manual ? i18n.badgeManual : i18n.badgeAverage;
+		badge.classList.toggle( 'tbtstu-badge--manual', manual );
+
+		// Only offered when there is something to go back from.
+		panel.querySelector( '[data-role="use-average"]' ).hidden = ! manual;
+
+		setChip( row, level );
+	}
+
+	/**
+	 * Recompute the overall from the panel's skills, unless a teacher has
+	 * taken it over by hand.
+	 */
+	function recomputeOverall( panel ) {
+		if ( '1' === panel.getAttribute( 'data-manual' ) ) {
+			return;
+		}
+		panel.setAttribute( 'data-level', averageOfSkills( panelSkills( panel ) ) );
+		paintOverall( panel );
+	}
+
+	function markDirty( panel ) {
+		panel.setAttribute( 'data-dirty', '1' );
+		statusLine( panel.closest( '.tbtstu-student' ), 'status', i18n.notSaved );
+	}
+
+	/** Moving the overall slider is what claims it: from here it is manual. */
+	function moveOverall( range ) {
+		var panel = range.closest( '[data-role="panel"]' );
+		var level = LEVELS[ Number( range.value ) ];
+		if ( ! level ) {
+			return;
+		}
+		panel.setAttribute( 'data-level', level );
+		panel.setAttribute( 'data-manual', '1' );
+		paintOverall( panel );
+		markDirty( panel );
+	}
+
+	function moveSkill( range ) {
+		var wrap = range.closest( '.tbtstu-skill' );
+		var panel = range.closest( '[data-role="panel"]' );
+		var level = LEVELS[ Number( range.value ) ];
+		if ( ! level ) {
+			return;
+		}
+		wrap.setAttribute( 'data-value', level );
+		paintSkill( wrap );
+		recomputeOverall( panel );
+		markDirty( panel );
+	}
+
+	function clearSkillValue( wrap ) {
+		var panel = wrap.closest( '[data-role="panel"]' );
+		wrap.setAttribute( 'data-value', '' );
+		// Back to a starting point rather than to A0: the slider position of an
+		// unset skill is where the teacher's thumb begins, not a value.
+		var range = wrap.querySelector( '[data-role="skill-range"]' );
+		range.value = String( indexOfLevel( panel.getAttribute( 'data-level' ) || '' ) );
+		paintSkill( wrap );
+		recomputeOverall( panel );
+		markDirty( panel );
+	}
+
+	/**
+	 * Hand the overall back to the average, and repaint it immediately. With
+	 * no skills set that means the overall goes to "—" and the chip back to
+	 * "No level set" — which is the honest answer for a student nobody has
+	 * assessed.
+	 */
+	function setManual( panel, manual ) {
+		panel.setAttribute( 'data-manual', manual ? '1' : '0' );
+		if ( ! manual ) {
+			panel.setAttribute( 'data-level', averageOfSkills( panelSkills( panel ) ) );
+		}
+		paintOverall( panel );
+		markDirty( panel );
+	}
+
+	function saveLevels( row, ui ) {
+		var panel = row.querySelector( '[data-role="panel"]' );
+		if ( ! panel ) {
+			return;
+		}
+
+		var manual = '1' === panel.getAttribute( 'data-manual' );
+		var skills = panelSkills( panel );
+
+		var fields = {
+			student_id: row.getAttribute( 'data-student-id' ),
+			level_manual: manual ? '1' : '0',
+			level: panel.getAttribute( 'data-level' ) || ''
+		};
+		SKILL_KEYS.forEach( function ( key ) {
+			fields[ 'skills[' + key + ']' ] = skills[ key ];
+		} );
+
+		statusLine( row, 'status', i18n.saving );
+
+		post( 'tbtstu_set_levels', fields ).then( function ( data ) {
+			var saved = data.skills || {};
+
+			row.setAttribute( 'data-level', data.level || '' );
+			row.setAttribute( 'data-level-manual', Number( data.level_manual ) ? '1' : '0' );
+			SKILL_KEYS.forEach( function ( key ) {
+				row.setAttribute( skillAttribute( key ), saved[ key ] || '' );
+			} );
+
+			// Repainted from the server's answer, not from the preview: the
+			// average was recomputed there, and this is what the row now holds.
+			panel.setAttribute( 'data-level', data.level || '' );
+			panel.setAttribute( 'data-manual', Number( data.level_manual ) ? '1' : '0' );
+			SKILL_KEYS.forEach( function ( key ) {
+				var wrap = panel.querySelector( '.tbtstu-skill[data-skill="' + key + '"]' );
+				if ( wrap ) {
+					wrap.setAttribute( 'data-value', saved[ key ] || '' );
+					paintSkill( wrap );
+				}
+			} );
+			paintOverall( panel );
+
+			panel.removeAttribute( 'data-dirty' );
+			statusLine( row, 'status', i18n.saved );
+
+			// The "No level set" toggle reads data-level, so a save can change
+			// whether this row still belongs in the filtered list.
+			applyFilter( ui );
+		} ).catch( function ( err ) {
+			// Nothing is reverted: the teacher's edits stay in the panel so
+			// they can be tried again, and the row's own attributes were never
+			// touched, so the chip goes back to what is stored.
+			setChip( row, rowLevel( row ) );
+			statusLine( row, 'status', err.message, true );
+		} );
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -702,16 +1035,75 @@
 	 * ------------------------------------------------------------------ */
 
 	function toggleProfilePanel( row ) {
-		var panel = row.querySelector( '[data-role="profile-panel"]' );
+		var existing = row.querySelector( '[data-role="profile-panel"]' );
 		var button = row.querySelector( '[data-role="profile"]' );
-		var opening = panel.hidden;
 
-		setPanel( button, panel, opening );
-
-		if ( opening ) {
-			paintCount( row );
-			profileStatus( row, '' );
+		if ( existing ) {
+			existing.remove();
+			button.setAttribute( 'aria-expanded', 'false' );
+			return;
 		}
+
+		row.appendChild( buildProfilePanel( row ) );
+		button.setAttribute( 'aria-expanded', 'true' );
+	}
+
+	/**
+	 * The profile panel, built from the row's `data-profile`.
+	 *
+	 * Both hints are built here, unconditionally and outside any toggle: the
+	 * privacy rule is what makes the field lawful to use, so it is never a
+	 * tooltip and never something the panel can be in a state without.
+	 */
+	function buildProfilePanel( row ) {
+		var studentId = row.getAttribute( 'data-student-id' );
+		var profile = row.getAttribute( 'data-profile' ) || '';
+		var fieldId = 'tbtstu-profile-text-' + studentId;
+
+		var panel = make( 'div', 'tbtstu-profile', 'profile-panel' );
+		panel.id = 'tbtstu-profile-' + studentId;
+
+		var label = make( 'label', 'tbtstu-label' );
+		label.setAttribute( 'for', fieldId );
+		label.textContent = i18n.profileLabel;
+
+		var textarea = document.createElement( 'textarea' );
+		textarea.className = 'tbtstu-textarea';
+		textarea.id = fieldId;
+		textarea.setAttribute( 'data-role', 'profile-text' );
+		textarea.rows = 3;
+		textarea.maxLength = PROFILE_MAX;
+		textarea.value = profile;
+
+		var hint = make( 'p', 'tbtstu-help' );
+		hint.textContent = i18n.profileHint;
+
+		var use = make( 'p', 'tbtstu-help' );
+		use.textContent = i18n.profileUse;
+
+		var foot = make( 'div', 'tbtstu-profile-foot' );
+
+		var count = make( 'span', 'tbtstu-count', 'profile-count' );
+		count.textContent = countLabel( profile.length );
+
+		var save = make( 'button', 'tbtstu-btn', 'profile-save' );
+		save.type = 'button';
+		save.textContent = i18n.save;
+
+		foot.appendChild( count );
+		foot.appendChild( save );
+
+		var status = make( 'p', 'tbtstu-status', 'profile-status' );
+		status.setAttribute( 'aria-live', 'polite' );
+
+		panel.appendChild( label );
+		panel.appendChild( textarea );
+		panel.appendChild( hint );
+		panel.appendChild( use );
+		panel.appendChild( foot );
+		panel.appendChild( status );
+
+		return panel;
 	}
 
 	/**
@@ -748,7 +1140,7 @@
 			return;
 		}
 
-		profileStatus( row, i18n.saving );
+		statusLine( row, 'profile-status', i18n.saving );
 
 		post( 'tbtstu_set_profile', {
 			student_id: row.getAttribute( 'data-student-id' ),
@@ -762,46 +1154,31 @@
 			row.setAttribute( 'data-profile', saved );
 			setProfileMarker( row, saved );
 			paintCount( row );
-			profileStatus( row, i18n.saved );
+			statusLine( row, 'profile-status', i18n.saved );
 		} ).catch( function ( err ) {
 			// Nothing is reverted: the teacher's text stays in the field so it
 			// can be corrected and saved again, rather than being thrown away
 			// on their behalf.
-			profileStatus( row, err.message, true );
+			statusLine( row, 'profile-status', err.message, true );
 		} );
-	}
-
-	function profileStatus( row, message, isError ) {
-		var element = row.querySelector( '[data-role="profile-status"]' );
-		if ( ! element ) {
-			return;
-		}
-		element.textContent = message || '';
-		element.classList.toggle( 'is-error', !! isError );
 	}
 
 	/* ------------------------------------------------------------------ *
 	 * Remove
 	 * ------------------------------------------------------------------ */
 
-	function removeStudent( row, list, empty, error ) {
+	function removeStudent( row, ui ) {
 		if ( ! window.confirm( i18n.confirmRemove ) ) {
 			return;
 		}
-		clearError( error );
+		clearError( ui.error );
 
 		post( 'tbtstu_remove', { student_id: row.getAttribute( 'data-student-id' ) } ).then( function () {
-			var group = row.closest( '.tbtstu-group' );
 			row.remove();
-			// An empty letter group is a heading over nothing.
-			if ( group && ! group.querySelector( '.tbtstu-student' ) ) {
-				group.remove();
-			}
-			if ( ! list.querySelector( '.tbtstu-student' ) ) {
-				empty.hidden = false;
-			}
+			// The count and the empty state both move when a row goes.
+			applyFilter( ui );
 		} ).catch( function ( err ) {
-			showError( error, err.message );
+			showError( ui.error, err.message );
 		} );
 	}
 

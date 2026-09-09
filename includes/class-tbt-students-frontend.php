@@ -1,10 +1,15 @@
 <?php
 /**
- * The [tbt_students] page: hero, search box, and the teacher's list.
+ * The [tbt_students] page: hero, filter bar, search box, and the teacher's
+ * list.
  *
- * Server-rendered rather than fetched, so it paints in one pass inside Divi
- * with no loading flash. JS only touches the list after the teacher does
- * something to it.
+ * The list is server-rendered rather than fetched, so it paints in one pass
+ * inside Divi with no loading flash. The PANELS are not: each row carries the
+ * data its panels need in `data-` attributes, and JS builds a panel the first
+ * time the teacher opens it. Rendering a level panel and a profile panel for
+ * every student meant a slider, a tick legend and a textarea per row that most
+ * of them would never see — and with five skill sliders added to the level
+ * panel it would have meant six.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -12,11 +17,6 @@ defined( 'ABSPATH' ) || exit;
 class TBT_Students_Frontend {
 
 	const SHORTCODE = 'tbt_students';
-
-	/**
-	 * Group letter used for a name that does not start with a letter.
-	 */
-	const OTHER_GROUP = '#';
 
 	/**
 	 * Assets are queued once per request whichever path gets there first.
@@ -82,36 +82,60 @@ class TBT_Students_Frontend {
 				'bands'        => TBT_Students_DB::bands(),
 				'bandNames'    => TBT_Students_DB::band_names(),
 				'defaultIndex' => TBT_Students_DB::default_index(),
+				// The five skills cross from PHP for the reason the scale does.
+				// The panel, the row's data attributes and the column names all
+				// come off one list, so a skill cannot exist on the client that
+				// the server has never heard of.
+				'skills'       => TBT_Students_DB::skills(),
 				// The cap crosses from PHP for the same reason the scale does:
 				// the textarea, the counter and the server must agree on one
 				// number, and the one that drifts silently is the client's.
 				'profileMax'   => TBT_Students_DB::PROFILE_MAX,
 				'i18n'         => array(
-					'noResults'     => __( 'No matching students', 'tbt-students' ),
-					'searching'     => __( 'Searching…', 'tbt-students' ),
-					'noLevel'       => __( 'No level set', 'tbt-students' ),
-					'level'         => __( 'Level', 'tbt-students' ),
-					'profile'       => __( 'Profile', 'tbt-students' ),
-					'profileLabel'  => __( 'Student profile', 'tbt-students' ),
-					'profileHint'   => __( 'Interests and context only. No names, no religion, health, ethnicity or politics.', 'tbt-students' ),
-					'profileUse'    => __( 'Used when a tool makes examples for a one-to-one class.', 'tbt-students' ),
-					'profileSet'    => __( 'This student has a profile', 'tbt-students' ),
+					'noResults'      => __( 'No matching students', 'tbt-students' ),
+					'searching'      => __( 'Searching…', 'tbt-students' ),
+					'noLevel'        => __( 'No level set', 'tbt-students' ),
+					'levels'         => __( 'Levels', 'tbt-students' ),
+					'profile'        => __( 'Profile', 'tbt-students' ),
+					'profileLabel'   => __( 'Student profile', 'tbt-students' ),
+					'profileHint'    => __( 'Interests and context only. No names, no religion, health, ethnicity or politics.', 'tbt-students' ),
+					'profileUse'     => __( 'Used when a tool makes examples for a one-to-one class.', 'tbt-students' ),
+					'profileSet'     => __( 'This student has a profile', 'tbt-students' ),
 					/* translators: 1: characters used, 2: maximum characters. */
-					'profileCount'  => __( '%1$d / %2$d', 'tbt-students' ),
-					'save'          => __( 'Save', 'tbt-students' ),
-					'remove'        => __( 'Remove', 'tbt-students' ),
-					'saving'        => __( 'Saving…', 'tbt-students' ),
-					'saved'         => __( 'Saved', 'tbt-students' ),
-					'confirmRemove' => __( 'Remove this student from your list? Their account is not deleted.', 'tbt-students' ),
-					'networkError'  => __( 'Couldn\'t reach the server. Try again.', 'tbt-students' ),
-					'genericError'  => __( 'Something went wrong. Try again.', 'tbt-students' ),
-					'levelAria'     => __( 'Level', 'tbt-students' ),
+					'profileCount'   => __( '%1$d / %2$d', 'tbt-students' ),
+					'save'           => __( 'Save', 'tbt-students' ),
+					'remove'         => __( 'Remove', 'tbt-students' ),
+					'saving'         => __( 'Saving…', 'tbt-students' ),
+					'saved'          => __( 'Saved', 'tbt-students' ),
+					'notSaved'       => __( 'Not saved yet', 'tbt-students' ),
+					'confirmRemove'  => __( 'Remove this student from your list? Their account is not deleted.', 'tbt-students' ),
+					'networkError'   => __( 'Couldn\'t reach the server. Try again.', 'tbt-students' ),
+					'genericError'   => __( 'Something went wrong. Try again.', 'tbt-students' ),
+					'levelAria'      => __( 'Level', 'tbt-students' ),
 					/* translators: %s: band code, e.g. B1 */
-					'aLittleOver'   => __( 'a little over %s', 'tbt-students' ),
+					'aLittleOver'    => __( 'a little over %s', 'tbt-students' ),
 					/* translators: %s: band code, e.g. B1 */
 					'halfwayThrough' => __( 'halfway through %s', 'tbt-students' ),
 					/* translators: %s: the NEXT band code, e.g. B2 */
-					'almost'        => __( 'almost %s', 'tbt-students' ),
+					'almost'         => __( 'almost %s', 'tbt-students' ),
+					// The levels panel.
+					'overallLevel'   => __( 'Overall level', 'tbt-students' ),
+					'languageSkills' => __( 'Language skills', 'tbt-students' ),
+					'badgeAverage'   => __( 'Skills average', 'tbt-students' ),
+					'badgeManual'    => __( 'Set manually', 'tbt-students' ),
+					'useAverage'     => __( 'Use average', 'tbt-students' ),
+					'clear'          => __( 'Clear', 'tbt-students' ),
+					/* translators: %s: skill name, e.g. Listening */
+					'clearSkill'     => __( 'Clear %s', 'tbt-students' ),
+					/* translators: %s: skill name, e.g. Listening */
+					'skillAria'      => __( '%s level', 'tbt-students' ),
+					// The filter bar.
+					/* translators: 1: students shown, 2: students in the list. */
+					'countLine'      => __( '%1$d of %2$d students', 'tbt-students' ),
+					'noMatch'        => __( 'No students match.', 'tbt-students' ),
+					'noStudents'     => __( 'No students yet. Search above to add your first one.', 'tbt-students' ),
+					'addShow'        => __( '+ Add a student', 'tbt-students' ),
+					'addHide'        => __( '− Add a student', 'tbt-students' ),
 				),
 			)
 		);
@@ -153,7 +177,7 @@ class TBT_Students_Frontend {
 		$show_hero = (bool) apply_filters( 'tbtstu_show_hero', $show_hero );
 
 		$students = TBT_Students_DB::for_teacher( get_current_user_id() );
-		$groups   = self::group_by_letter( $students );
+		$total    = count( $students );
 
 		ob_start();
 		?>
@@ -192,7 +216,53 @@ class TBT_Students_Frontend {
 				<span class="tbtstu-rule"></span>
 			</div>
 
-			<div class="tbtstu-add">
+			<?php
+			/*
+			 * The filter box, not the letter groups, is how a teacher finds a
+			 * student now. It is `type="text"` rather than `type="search"` on
+			 * purpose: every engine draws the search input's clear affordance
+			 * differently and none of them can be styled to match the rest of
+			 * this page.
+			 *
+			 * Filtering is entirely client-side over rows already on the page —
+			 * there is no request behind it, and no state to keep on the server.
+			 */
+			?>
+			<div class="tbtstu-filter">
+				<label class="tbtstu-label" for="tbtstu-filter"><?php esc_html_e( 'Filter your students', 'tbt-students' ); ?></label>
+				<div class="tbtstu-filter-row">
+					<input type="text" id="tbtstu-filter" class="tbtstu-input" data-role="filter"
+						autocomplete="off" spellcheck="false"
+						placeholder="<?php esc_attr_e( 'Type a name or email…', 'tbt-students' ); ?>">
+					<button type="button" class="tbtstu-toggle" data-role="filter-nolevel" aria-pressed="false">
+						<?php esc_html_e( 'No level set', 'tbt-students' ); ?>
+					</button>
+				</div>
+				<p class="tbtstu-count-line" data-role="filter-count" aria-live="polite">
+					<?php
+					printf(
+						/* translators: 1: students shown, 2: students in the list. */
+						esc_html__( '%1$d of %2$d students', 'tbt-students' ),
+						(int) $total,
+						(int) $total
+					);
+					?>
+				</p>
+			</div>
+
+			<?php
+			/*
+			 * Adding a student is the occasional act; finding one is the daily
+			 * one. So the search box starts collapsed behind a quiet toggle,
+			 * below the filter, and everything inside it is exactly what it was.
+			 */
+			?>
+			<button type="button" class="tbtstu-add-toggle" data-role="add-toggle"
+				aria-expanded="false" aria-controls="tbtstu-add">
+				<?php esc_html_e( '+ Add a student', 'tbt-students' ); ?>
+			</button>
+
+			<div class="tbtstu-add" id="tbtstu-add" hidden>
 				<label class="tbtstu-label" for="tbtstu-search"><?php esc_html_e( 'Add a student', 'tbt-students' ); ?></label>
 				<input type="text" id="tbtstu-search" class="tbtstu-input" data-role="search"
 					autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false"
@@ -202,12 +272,26 @@ class TBT_Students_Frontend {
 				<ul class="tbtstu-results" id="tbtstu-results" data-role="results" role="listbox" hidden></ul>
 			</div>
 
+			<?php
+			/*
+			 * Flat and alphabetical. The rows arrive from for_teacher() already
+			 * in Polish alphabetical order — Ł after L, not folded into it — and
+			 * nothing here re-sorts them: the collation lives in one place.
+			 */
+			?>
 			<div class="tbtstu-list" data-role="list">
-				<?php foreach ( $groups as $letter => $rows ) : ?>
-					<?php self::render_group( $letter, $rows ); ?>
+				<?php foreach ( $students as $row ) : ?>
+					<?php self::render_student( $row ); ?>
 				<?php endforeach; ?>
 			</div>
 
+			<?php
+			/*
+			 * One element, two states. "No students yet" is the teacher having
+			 * added nobody; "No students match" is a filter hiding everyone. JS
+			 * sets the wording, because only JS knows which of the two it is.
+			 */
+			?>
 			<div class="tbtstu-empty" data-role="empty"<?php echo empty( $students ) ? '' : ' hidden'; ?>>
 				<?php esc_html_e( 'No students yet. Search above to add your first one.', 'tbt-students' ); ?>
 			</div>
@@ -226,48 +310,48 @@ class TBT_Students_Frontend {
 	}
 
 	/**
-	 * One letter group and its students.
+	 * The `data-` attribute a skill's level is carried in.
 	 *
-	 * The header is the letter and a rule, with no count. A count on a list
-	 * this size is noise the teacher never reads, and it is one more thing to
-	 * keep correct as rows are added and removed in place.
+	 * Underscores become dashes, so `spoken_interaction` reads as
+	 * `data-skill-spoken-interaction`. One transform, mirrored in the script.
 	 *
-	 * @param string   $letter Group letter.
-	 * @param object[] $rows   Student rows.
+	 * @param string $key Skill key.
+	 * @return string
 	 */
-	private static function render_group( $letter, $rows ) {
-		?>
-		<section class="tbtstu-group" data-letter="<?php echo esc_attr( $letter ); ?>">
-			<div class="tbtstu-group-head">
-				<span class="tbtstu-group-letter"><?php echo esc_html( $letter ); ?></span>
-				<span class="tbtstu-rule"></span>
-			</div>
-			<?php foreach ( $rows as $row ) : ?>
-				<?php self::render_student( $row ); ?>
-			<?php endforeach; ?>
-		</section>
-		<?php
+	public static function skill_attribute( $key ) {
+		return 'data-skill-' . str_replace( '_', '-', (string) $key );
 	}
 
 	/**
-	 * One student row, with both panels closed.
+	 * One student row: the name, the chip, the three buttons — and no panels.
 	 *
-	 * @param object $row Student row with display_name, level and profile.
+	 * Everything a panel needs to build itself rides on the row instead. That
+	 * is five short strings and a flag per student, against a slider, a tick
+	 * legend, a textarea and two panels per student that most rows never open.
+	 *
+	 * @param object $row Student row from for_teacher().
 	 */
 	private static function render_student( $row ) {
-		$level     = ( null === $row->level ) ? '' : (string) $row->level;
+		$levels    = TBT_Students_DB::levels_from_row( $row );
+		$level     = $levels['level'];
 		$has_level = '' !== $level;
-		$index     = $has_level ? array_search( $level, TBT_Students_DB::valid_levels(), true ) : TBT_Students_DB::default_index();
 		$panel_id  = 'tbtstu-panel-' . (int) $row->user_id;
 
-		$profile       = ( ! isset( $row->profile ) || null === $row->profile ) ? '' : (string) $row->profile;
-		$has_profile   = '' !== $profile;
-		$profile_id    = 'tbtstu-profile-' . (int) $row->user_id;
-		$profile_field = 'tbtstu-profile-text-' . (int) $row->user_id;
-		$profile_used  = TBT_Students_DB::profile_length( $profile );
+		$profile     = ( ! isset( $row->profile ) || null === $row->profile ) ? '' : (string) $row->profile;
+		$has_profile = '' !== $profile;
+		$profile_id  = 'tbtstu-profile-' . (int) $row->user_id;
+
+		// The filter matches on the email as well as the name; the list itself
+		// never shows it.
+		$email = isset( $row->email ) ? (string) $row->email : '';
 		?>
 		<div class="tbtstu-student" data-student-id="<?php echo esc_attr( (int) $row->user_id ); ?>"
+			data-email="<?php echo esc_attr( $email ); ?>"
 			data-level="<?php echo esc_attr( $level ); ?>"
+			data-level-manual="<?php echo esc_attr( $levels['level_manual'] ? '1' : '0' ); ?>"
+			<?php foreach ( $levels['skills'] as $key => $value ) : ?>
+			<?php echo esc_attr( self::skill_attribute( $key ) ); ?>="<?php echo esc_attr( $value ); ?>"
+			<?php endforeach; ?>
 			data-profile="<?php echo esc_attr( $profile ); ?>">
 			<div class="tbtstu-student-main">
 				<div class="tbtstu-student-body">
@@ -279,7 +363,7 @@ class TBT_Students_Frontend {
 				<div class="tbtstu-student-actions">
 					<button type="button" class="tbtstu-btn" data-role="level"
 						aria-expanded="false" aria-controls="<?php echo esc_attr( $panel_id ); ?>">
-						<?php esc_html_e( 'Level', 'tbt-students' ); ?>
+						<?php esc_html_e( 'Levels', 'tbt-students' ); ?>
 					</button>
 					<?php
 					/*
@@ -313,155 +397,33 @@ class TBT_Students_Frontend {
 					</button>
 				</div>
 			</div>
-
-			<div class="tbtstu-level" id="<?php echo esc_attr( $panel_id ); ?>" data-role="panel" hidden>
-				<p class="tbtstu-readout">
-					<span class="tbtstu-readout-code" data-role="readout-code"></span>
-					<span class="tbtstu-readout-phrase" data-role="readout-phrase"></span>
-				</p>
-				<?php
-				/*
-				 * step="1" over 0–24 is what makes an invalid level
-				 * unreachable from the UI: there is no position on this track
-				 * that is not one of the 25. The server re-validates anyway.
-				 */
-				?>
-				<input type="range" class="tbtstu-range" data-role="range"
-					min="0" max="<?php echo esc_attr( count( TBT_Students_DB::valid_levels() ) - 1 ); ?>"
-					step="1" value="<?php echo esc_attr( (int) $index ); ?>"
-					aria-label="<?php esc_attr_e( 'Level', 'tbt-students' ); ?>">
-				<div class="tbtstu-ticks">
-					<?php foreach ( TBT_Students_DB::bands() as $i => $band ) : ?>
-						<span class="tbtstu-tick" style="left: <?php echo esc_attr( round( $i / 6 * 100, 4 ) ); ?>%"><?php echo esc_html( $band ); ?></span>
-					<?php endforeach; ?>
-				</div>
-				<p class="tbtstu-status" data-role="status" aria-live="polite"></p>
-			</div>
-
-			<?php
-			/*
-			 * The two hints are not decoration and they are not a tooltip. The
-			 * field's contents are sent to a language model on every
-			 * generation, about a paying client who has not consented to
-			 * anything beyond being taught, so the rule that keeps the field
-			 * lawful to use is rendered next to it, always, in plain sight.
-			 */
-			?>
-			<div class="tbtstu-profile" id="<?php echo esc_attr( $profile_id ); ?>" data-role="profile-panel" hidden>
-				<label class="tbtstu-label" for="<?php echo esc_attr( $profile_field ); ?>">
-					<?php esc_html_e( 'Student profile', 'tbt-students' ); ?>
-				</label>
-				<textarea class="tbtstu-textarea" id="<?php echo esc_attr( $profile_field ); ?>"
-					data-role="profile-text" rows="3"
-					maxlength="<?php echo esc_attr( TBT_Students_DB::PROFILE_MAX ); ?>"
-				><?php echo esc_textarea( $profile ); ?></textarea>
-				<p class="tbtstu-help"><?php esc_html_e( 'Interests and context only. No names, no religion, health, ethnicity or politics.', 'tbt-students' ); ?></p>
-				<p class="tbtstu-help"><?php esc_html_e( 'Used when a tool makes examples for a one-to-one class.', 'tbt-students' ); ?></p>
-				<div class="tbtstu-profile-foot">
-					<?php
-					/*
-					 * Plain muted text the whole way, with no colour change as
-					 * the limit approaches: the textarea simply stops at 300,
-					 * so there is nothing for a warning colour to warn about.
-					 */
-					?>
-					<span class="tbtstu-count" data-role="profile-count">
-						<?php
-						printf(
-							/* translators: 1: characters used, 2: maximum characters. */
-							esc_html__( '%1$d / %2$d', 'tbt-students' ),
-							(int) $profile_used,
-							(int) TBT_Students_DB::PROFILE_MAX
-						);
-						?>
-					</span>
-					<button type="button" class="tbtstu-btn" data-role="profile-save">
-						<?php esc_html_e( 'Save', 'tbt-students' ); ?>
-					</button>
-				</div>
-				<p class="tbtstu-status" data-role="profile-status" aria-live="polite"></p>
-			</div>
 		</div>
 		<?php
 	}
 
 	/**
-	 * Group sorted rows by the first letter of the display name.
-	 *
-	 * The rows arrive already in Polish alphabetical order, so walking them
-	 * once and starting a new group whenever the letter changes produces
-	 * groups in that same order — Ł after L, not folded into it. Nothing
-	 * re-sorts here; the collation lives in one place.
-	 *
-	 * @param object[] $rows Sorted student rows.
-	 * @return array<string,object[]>
-	 */
-	public static function group_by_letter( $rows ) {
-		$groups = array();
-		$other  = array();
-
-		foreach ( $rows as $row ) {
-			$letter = self::first_letter( (string) $row->display_name );
-			if ( self::OTHER_GROUP === $letter ) {
-				$other[] = $row;
-				continue;
-			}
-			if ( ! isset( $groups[ $letter ] ) ) {
-				$groups[ $letter ] = array();
-			}
-			$groups[ $letter ][] = $row;
-		}
-
-		// Names that do not start with a letter go last, under a single "#".
-		if ( ! empty( $other ) ) {
-			$groups[ self::OTHER_GROUP ] = $other;
-		}
-
-		return $groups;
-	}
-
-	/**
-	 * The group letter for a display name.
-	 *
-	 * Diacritics are kept, not folded: Ł is its own letter in Polish and gets
-	 * its own group, and so do Ą, Ć, Ę, Ń, Ó, Ś, Ź and Ż.
-	 *
-	 * @param string $name Display name.
-	 * @return string
-	 */
-	public static function first_letter( $name ) {
-		$name = trim( $name );
-		if ( '' === $name ) {
-			return self::OTHER_GROUP;
-		}
-		$first = function_exists( 'mb_substr' ) ? mb_substr( $name, 0, 1, 'UTF-8' ) : substr( $name, 0, 1 );
-		$first = TBT_Students_DB::mb_upper( $first );
-
-		// \p{L} rather than ctype_alpha: the interesting cases are exactly the
-		// ones outside ASCII.
-		if ( ! preg_match( '/^\p{L}$/u', $first ) ) {
-			return self::OTHER_GROUP;
-		}
-		return $first;
-	}
-
-	/**
 	 * The client-side shape of one student, for the row JS builds after an add.
+	 *
+	 * Every field the rendered row carries, so the two builders produce the
+	 * same row — see buildRow() in frontend.js.
 	 *
 	 * @param int $user_id Student user ID.
 	 * @return array
 	 */
 	public static function student_payload( $user_id ) {
-		$user    = get_userdata( (int) $user_id );
-		$level   = TBT_Students_DB::get_level( $user_id );
-		$profile = TBT_Students_DB::get_profile( $user_id );
+		$user   = get_userdata( (int) $user_id );
+		$levels = TBT_Students_DB::get_levels( $user_id );
 
 		return array(
 			'user_id'      => (int) $user_id,
 			'display_name' => $user ? $user->display_name : '',
-			'level'        => $level,
-			'profile'      => $profile,
-			'letter'       => self::first_letter( $user ? $user->display_name : '' ),
+			// The filter matches on the email as well as the name, so the row
+			// has to carry it — the list itself never shows it.
+			'email'        => $user ? $user->user_email : '',
+			'level'        => $levels['level'],
+			'level_manual' => $levels['level_manual'],
+			'skills'       => $levels['skills'],
+			'profile'      => TBT_Students_DB::get_profile( $user_id ),
 		);
 	}
 }

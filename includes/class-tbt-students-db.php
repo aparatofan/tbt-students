@@ -32,6 +32,23 @@ class TBT_Students_DB {
 	);
 
 	/**
+	 * Skill key => column name, in CEFR self-assessment grid order.
+	 *
+	 * The ONE place a skill column name is written down. Everything else —
+	 * the SELECT, the update, the row's data attributes, the panel, the
+	 * public API — goes through skills() or skill_column(), so adding or
+	 * renaming a skill is an edit to this array rather than a search across
+	 * the plugin.
+	 */
+	const SKILL_COLUMNS = array(
+		'listening'          => 'skill_listening',
+		'reading'            => 'skill_reading',
+		'spoken_interaction' => 'skill_spoken_interaction',
+		'spoken_production'  => 'skill_spoken_production',
+		'writing'            => 'skill_writing',
+	);
+
+	/**
 	 * The user role a student account must have to be listed.
 	 */
 	const STUDENT_ROLE = 'customer';
@@ -45,15 +62,55 @@ class TBT_Students_DB {
 	}
 
 	public static function activate() {
-		self::create_tables();
-		update_option( 'tbtstu_db_version', TBTSTU_DB_VERSION );
+		self::upgrade();
 	}
 
 	public static function maybe_upgrade() {
 		if ( get_option( 'tbtstu_db_version' ) !== TBTSTU_DB_VERSION ) {
-			self::create_tables();
-			update_option( 'tbtstu_db_version', TBTSTU_DB_VERSION );
+			self::upgrade();
 		}
+	}
+
+	/**
+	 * Bring the table up to the current schema, running any migration the
+	 * stored version calls for.
+	 *
+	 * The previous version is read BEFORE create_tables(), because dbDelta is
+	 * what makes the new columns exist and the option is what says where we
+	 * came from — once either has run, the answer is gone. Activation goes
+	 * through here too: register_activation_hook fires on a reactivation of an
+	 * install that is already carrying rows, and that install needs the same
+	 * migration a silent upgrade would have given it.
+	 */
+	private static function upgrade() {
+		$from = get_option( 'tbtstu_db_version' );
+
+		self::create_tables();
+
+		// Non-empty means an existing install, not a fresh one. A fresh
+		// install has no rows to backfill, but the guard is what makes that
+		// true by design rather than by luck.
+		if ( '' !== $from && false !== $from && (int) $from < 3 ) {
+			self::backfill_level_manual();
+		}
+
+		update_option( 'tbtstu_db_version', TBTSTU_DB_VERSION );
+	}
+
+	/**
+	 * The 2 -> 3 migration.
+	 *
+	 * dbDelta adds `level_manual` with a default of 0, which says "this level
+	 * is the average of the skills". Every level that existed before version 3
+	 * was typed in by a teacher, and there are no skills behind it to average,
+	 * so left at 0 each one would read as "No level set" on the next page load.
+	 * They are all manual, because at the time there was no other kind.
+	 */
+	private static function backfill_level_manual() {
+		global $wpdb;
+		$table = self::table();
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name, no user input.
+		$wpdb->query( "UPDATE {$table} SET level_manual = 1 WHERE level IS NOT NULL" );
 	}
 
 	private static function create_tables() {
@@ -73,11 +130,22 @@ class TBT_Students_DB {
 		// not a byte, and the cap is counted in characters — the headroom is
 		// against a future cap change rather than against an encoding bug,
 		// and it costs nothing on a table this size.
+		//
+		// The five skill columns are nullable for the reason `level` is: an
+		// unset skill is "not assessed", which is not A0. `level_manual` is
+		// NOT NULL because it is a two-state answer with no third state —
+		// either a teacher set the overall level by hand or the average did.
 		dbDelta(
 			"CREATE TABLE {$table} (
   user_id    BIGINT UNSIGNED NOT NULL,
   teacher_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
   level      VARCHAR(6)      NULL DEFAULT NULL,
+  level_manual TINYINT(1)    NOT NULL DEFAULT 0,
+  skill_listening          VARCHAR(6) NULL DEFAULT NULL,
+  skill_reading            VARCHAR(6) NULL DEFAULT NULL,
+  skill_spoken_interaction VARCHAR(6) NULL DEFAULT NULL,
+  skill_spoken_production  VARCHAR(6) NULL DEFAULT NULL,
+  skill_writing            VARCHAR(6) NULL DEFAULT NULL,
   profile    VARCHAR(400)    NULL DEFAULT NULL,
   created_at DATETIME        NOT NULL,
   updated_at DATETIME        NOT NULL,
@@ -155,6 +223,107 @@ class TBT_Students_DB {
 	}
 
 	/* ------------------------------------------------------------------ *
+	 * Language skills
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * Skill key => label, in grid order.
+	 *
+	 * Crosses to JS through wp_localize_script for the same reason the scale
+	 * does: two copies of a five-item list is two lists that can disagree, and
+	 * the one that disagrees silently is the one on the client.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function skills() {
+		return array(
+			'listening'          => __( 'Listening', 'tbt-students' ),
+			'reading'            => __( 'Reading', 'tbt-students' ),
+			'spoken_interaction' => __( 'Spoken interaction', 'tbt-students' ),
+			'spoken_production'  => __( 'Spoken production', 'tbt-students' ),
+			'writing'            => __( 'Writing', 'tbt-students' ),
+		);
+	}
+
+	/**
+	 * The five skill keys, in grid order.
+	 *
+	 * @return string[]
+	 */
+	public static function skill_keys() {
+		return array_keys( self::SKILL_COLUMNS );
+	}
+
+	/**
+	 * The column holding a skill, or '' when the key is not a skill.
+	 *
+	 * @param string $key Skill key.
+	 * @return string
+	 */
+	public static function skill_column( $key ) {
+		return isset( self::SKILL_COLUMNS[ $key ] ) ? self::SKILL_COLUMNS[ $key ] : '';
+	}
+
+	/**
+	 * An array with every skill key present, values '' unless supplied.
+	 *
+	 * Unknown keys are dropped and missing ones filled, so callers downstream
+	 * can read all five without checking isset — the same reasoning behind
+	 * get_level() returning '' rather than null.
+	 *
+	 * @param array $skills Loose key => level map.
+	 * @return array<string,string>
+	 */
+	public static function normalize_skills( $skills ) {
+		$out = array();
+		foreach ( self::skill_keys() as $key ) {
+			$value       = ( is_array( $skills ) && isset( $skills[ $key ] ) ) ? $skills[ $key ] : '';
+			$out[ $key ] = is_string( $value ) ? $value : '';
+		}
+		return $out;
+	}
+
+	/**
+	 * The overall level implied by a set of skills.
+	 *
+	 * Averages the slider indices of the skills that ARE set and ignores the
+	 * ones that are not: three set skills average over three, not over five,
+	 * and a student with one skill has an overall equal to that skill. An
+	 * unset skill is "not assessed", so counting it as A0 would drag the
+	 * overall down for a student nobody has finished assessing.
+	 *
+	 * PHP's round() is half away from zero. Indices are never negative, so
+	 * that is the same as half up — which is what the JS preview does with
+	 * Math.round(). The two must agree, because a preview that disagrees with
+	 * what gets stored is worse than no preview.
+	 *
+	 * @param array $skills Skill key => level, '' for unset.
+	 * @return string One of the 25 levels, or '' when no skill is set.
+	 */
+	public static function average_of_skills( array $skills ) {
+		$indices = array();
+
+		foreach ( self::normalize_skills( $skills ) as $level ) {
+			if ( '' === $level ) {
+				continue;
+			}
+			$index = array_search( $level, self::LEVELS, true );
+			if ( false !== $index ) {
+				$indices[] = (int) $index;
+			}
+		}
+
+		if ( empty( $indices ) ) {
+			return '';
+		}
+
+		$average = (int) round( array_sum( $indices ) / count( $indices ) );
+		$average = max( 0, min( count( self::LEVELS ) - 1, $average ) );
+
+		return self::LEVELS[ $average ];
+	}
+
+	/* ------------------------------------------------------------------ *
 	 * Reads
 	 * ------------------------------------------------------------------ */
 
@@ -193,10 +362,19 @@ class TBT_Students_DB {
 		$teacher_id = (int) $teacher_id;
 		$table      = self::table();
 
+		// Built from SKILL_COLUMNS rather than typed out, so a skill added to
+		// that array reaches the page without a second edit here. The values
+		// are class constants, never request data.
+		$skill_select = '';
+		foreach ( self::SKILL_COLUMNS as $column ) {
+			$skill_select .= ", s.{$column}";
+		}
+
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names.
-				"SELECT s.user_id, s.teacher_id, s.level, s.profile, s.created_at, s.updated_at,
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table and column names.
+				"SELECT s.user_id, s.teacher_id, s.level, s.level_manual{$skill_select},
+				        s.profile, s.created_at, s.updated_at,
 				        u.display_name, u.user_email AS email
 				 FROM {$table} s
 				 INNER JOIN {$wpdb->users} u ON u.ID = s.user_id
@@ -245,6 +423,67 @@ class TBT_Students_DB {
 			return '';
 		}
 		return (string) $row->level;
+	}
+
+	/**
+	 * The overall level, the manual flag and the five skills for one student.
+	 *
+	 * One row read for all seven values, so the chip, the panel and the AJAX
+	 * response cannot be built from three different reads of the same row.
+	 *
+	 * @param int $user_id Student user ID.
+	 * @return array{level:string,level_manual:int,skills:array<string,string>}
+	 */
+	public static function get_levels( $user_id ) {
+		return self::levels_from_row( self::get( $user_id ) );
+	}
+
+	/**
+	 * The same block, from a row already in hand.
+	 *
+	 * The page has every row from for_teacher() already; going back to the
+	 * database once per student to render a data attribute would be a query
+	 * per row for values that are sitting right there.
+	 *
+	 * @param object|null $row Student row, or null for a user with no row.
+	 * @return array{level:string,level_manual:int,skills:array<string,string>}
+	 */
+	public static function levels_from_row( $row ) {
+		return array(
+			'level'        => ( $row && null !== $row->level ) ? (string) $row->level : '',
+			'level_manual' => ( $row && ! empty( $row->level_manual ) ) ? 1 : 0,
+			'skills'       => self::skills_from_row( $row ),
+		);
+	}
+
+	/**
+	 * The five skills from a row, '' for each one that is not set.
+	 *
+	 * All five keys are always present — see normalize_skills().
+	 *
+	 * @param object|null $row Student row, or null.
+	 * @return array<string,string>
+	 */
+	public static function skills_from_row( $row ) {
+		$skills = array();
+		foreach ( self::SKILL_COLUMNS as $key => $column ) {
+			$value          = ( $row && isset( $row->$column ) && null !== $row->$column ) ? (string) $row->$column : '';
+			$skills[ $key ] = $value;
+		}
+		return $skills;
+	}
+
+	/**
+	 * The stored skills for a user, '' for each one not set.
+	 *
+	 * '' rather than null for the reason get_level() returns it: this is what
+	 * the public API hands to other plugins.
+	 *
+	 * @param int $user_id Student user ID.
+	 * @return array<string,string>
+	 */
+	public static function get_skills( $user_id ) {
+		return self::skills_from_row( self::get( $user_id ) );
 	}
 
 	/**
@@ -342,13 +581,27 @@ class TBT_Students_DB {
 	}
 
 	/**
-	 * Set (or clear) a student's level.
+	 * Set a student's overall level, the manual flag and all five skills, as
+	 * one write.
+	 *
+	 * This is the only path that writes `level`, and it is what keeps the
+	 * column true: when `level_manual` is 0 the stored level IS the average of
+	 * the stored skills, written through on every save rather than computed on
+	 * read. TBT_Students::get_level() is a published contract other plugins
+	 * call, so the answer stays in the column — one place, no read-path cost,
+	 * and no second definition of "current level" to drift.
+	 *
+	 * The submitted level is IGNORED when the flag is 0. The client's average
+	 * is a preview, and a preview must never be the thing that gets stored.
 	 *
 	 * @param int         $user_id Student user ID.
-	 * @param string|null $level   One of the 25 valid levels, or null/'' to clear.
-	 * @return true|WP_Error
+	 * @param string|null $level   One of the 25, or null/'' — used only when $manual.
+	 * @param bool|int    $manual  Whether the overall level was set by hand.
+	 * @param array       $skills  Skill key => level, '' for unset.
+	 * @return array{level:string,level_manual:int,skills:array<string,string>}|WP_Error
+	 *         The values the row now holds.
 	 */
-	public static function set_level( $user_id, $level ) {
+	public static function set_levels( $user_id, $level, $manual, array $skills ) {
 		global $wpdb;
 
 		$user_id = (int) $user_id;
@@ -356,27 +609,54 @@ class TBT_Students_DB {
 			return new WP_Error( 'tbtstu_not_listed', __( 'That student is not on your list.', 'tbt-students' ) );
 		}
 
-		$clearing = ( null === $level || '' === $level );
-		if ( ! $clearing && ! self::is_valid_level( $level ) ) {
-			return new WP_Error( 'tbtstu_bad_level', __( 'That is not a valid level.', 'tbt-students' ) );
+		$manual = (bool) $manual;
+		$skills = self::normalize_skills( $skills );
+
+		// Re-validated here even though the AJAX layer has already checked:
+		// this is the method that decides what the column holds, and the
+		// guarantee belongs with the write rather than with one of its callers.
+		foreach ( $skills as $value ) {
+			if ( '' !== $value && ! self::is_valid_level( $value ) ) {
+				return new WP_Error( 'tbtstu_bad_level', __( 'That is not a valid level.', 'tbt-students' ) );
+			}
 		}
 
-		$done = $wpdb->update(
-			self::table(),
-			array(
-				'level'      => $clearing ? null : $level,
-				'updated_at' => current_time( 'mysql' ),
-			),
-			array( 'user_id' => $user_id ),
-			array( '%s', '%s' ),
-			array( '%d' )
+		if ( $manual ) {
+			$level = ( null === $level ) ? '' : (string) $level;
+			if ( '' !== $level && ! self::is_valid_level( $level ) ) {
+				return new WP_Error( 'tbtstu_bad_level', __( 'That is not a valid level.', 'tbt-students' ) );
+			}
+		} else {
+			$level = self::average_of_skills( $skills );
+		}
+
+		$data = array(
+			'level'        => ( '' === $level ) ? null : $level,
+			'level_manual' => $manual ? 1 : 0,
 		);
 
-		if ( false === $done ) {
-			return new WP_Error( 'tbtstu_update_failed', __( 'Could not save that level.', 'tbt-students' ) );
+		// The format list is positional, so it is extended in step with $data.
+		$formats = array( '%s', '%d' );
+
+		foreach ( $skills as $key => $value ) {
+			$data[ self::skill_column( $key ) ] = ( '' === $value ) ? null : $value;
+			$formats[]                          = '%s';
 		}
 
-		return true;
+		$data['updated_at'] = current_time( 'mysql' );
+		$formats[]          = '%s';
+
+		$done = $wpdb->update( self::table(), $data, array( 'user_id' => $user_id ), $formats, array( '%d' ) );
+
+		if ( false === $done ) {
+			return new WP_Error( 'tbtstu_update_failed', __( 'Could not save those levels.', 'tbt-students' ) );
+		}
+
+		return array(
+			'level'        => $level,
+			'level_manual' => $manual ? 1 : 0,
+			'skills'       => $skills,
+		);
 	}
 
 	/**
