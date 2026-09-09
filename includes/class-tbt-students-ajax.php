@@ -22,6 +22,7 @@ class TBT_Students_Ajax {
 		add_action( 'wp_ajax_tbtstu_search', array( $this, 'search' ) );
 		add_action( 'wp_ajax_tbtstu_add', array( $this, 'add' ) );
 		add_action( 'wp_ajax_tbtstu_set_level', array( $this, 'set_level' ) );
+		add_action( 'wp_ajax_tbtstu_set_profile', array( $this, 'set_profile' ) );
 		add_action( 'wp_ajax_tbtstu_remove', array( $this, 'remove' ) );
 	}
 
@@ -195,6 +196,51 @@ class TBT_Students_Ajax {
 		}
 
 		wp_send_json_success( array( 'level' => $level ) );
+	}
+
+	/**
+	 * Save a student's profile note.
+	 */
+	public function set_profile() {
+		$this->guard();
+
+		$student_id = $this->requested_student();
+		$profile    = isset( $_POST['profile'] ) ? sanitize_textarea_field( wp_unslash( $_POST['profile'] ) ) : '';
+
+		if ( ! TBT_Students_DB::user_can_edit_student( $student_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'You are not allowed to edit that student.', 'tbt-students' ) ), 403 );
+		}
+
+		// The textarea caps at 300 characters as well, so a longer value means
+		// a request that did not come from the page. It is refused rather than
+		// truncated: silently storing a shortened version of what was sent is
+		// worse than saying no.
+		if ( TBT_Students_DB::is_profile_too_long( $profile ) ) {
+			wp_send_json_error(
+				array(
+					'message' => sprintf(
+						/* translators: %d: maximum number of characters. */
+						__( 'A profile can be at most %d characters.', 'tbt-students' ),
+						TBT_Students_DB::PROFILE_MAX
+					),
+					'code'    => 'tbtstu_profile_too_long',
+				),
+				400
+			);
+		}
+
+		$saved = TBT_Students_DB::set_profile( $student_id, $profile );
+		if ( is_wp_error( $saved ) ) {
+			wp_send_json_error(
+				array(
+					'message' => $saved->get_error_message(),
+					'code'    => $saved->get_error_code(),
+				),
+				400
+			);
+		}
+
+		wp_send_json_success( array( 'profile' => $profile ) );
 	}
 
 	/**

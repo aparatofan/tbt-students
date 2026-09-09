@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       TBT Students
  * Description:       The student profile spine for the TBT suite. A teacher lists their students on a public page and sets each student's CEFR level.
- * Version:           0.1.1
+ * Version:           0.2.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            TBT
@@ -12,15 +12,18 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TBTSTU_VERSION', '0.1.1' );
+define( 'TBTSTU_VERSION', '0.2.0' );
 
 /**
  * Schema version. Bumped ONLY when the table definition actually changes —
  * never as a side effect of a plugin release. A bump forces dbDelta on every
  * install, and a bump with no schema behind it teaches the next reader that
  * the number means nothing.
+ *
+ * 2 — the `profile` column. The first real schema change this plugin has had:
+ *     a short free-text note about the student, added beside `level`.
  */
-define( 'TBTSTU_DB_VERSION', '1' );
+define( 'TBTSTU_DB_VERSION', '2' );
 
 /**
  * The single capability gating everything this plugin does. Teachers get it by

@@ -82,11 +82,23 @@ class TBT_Students_Frontend {
 				'bands'        => TBT_Students_DB::bands(),
 				'bandNames'    => TBT_Students_DB::band_names(),
 				'defaultIndex' => TBT_Students_DB::default_index(),
+				// The cap crosses from PHP for the same reason the scale does:
+				// the textarea, the counter and the server must agree on one
+				// number, and the one that drifts silently is the client's.
+				'profileMax'   => TBT_Students_DB::PROFILE_MAX,
 				'i18n'         => array(
 					'noResults'     => __( 'No matching students', 'tbt-students' ),
 					'searching'     => __( 'Searching…', 'tbt-students' ),
 					'noLevel'       => __( 'No level set', 'tbt-students' ),
 					'level'         => __( 'Level', 'tbt-students' ),
+					'profile'       => __( 'Profile', 'tbt-students' ),
+					'profileLabel'  => __( 'Student profile', 'tbt-students' ),
+					'profileHint'   => __( 'Interests and context only. No names, no religion, health, ethnicity or politics.', 'tbt-students' ),
+					'profileUse'    => __( 'Used when a tool makes examples for a one-to-one class.', 'tbt-students' ),
+					'profileSet'    => __( 'This student has a profile', 'tbt-students' ),
+					/* translators: 1: characters used, 2: maximum characters. */
+					'profileCount'  => __( '%1$d / %2$d', 'tbt-students' ),
+					'save'          => __( 'Save', 'tbt-students' ),
 					'remove'        => __( 'Remove', 'tbt-students' ),
 					'saving'        => __( 'Saving…', 'tbt-students' ),
 					'saved'         => __( 'Saved', 'tbt-students' ),
@@ -238,18 +250,25 @@ class TBT_Students_Frontend {
 	}
 
 	/**
-	 * One student row, with its level panel closed.
+	 * One student row, with both panels closed.
 	 *
-	 * @param object $row Student row with display_name and level.
+	 * @param object $row Student row with display_name, level and profile.
 	 */
 	private static function render_student( $row ) {
 		$level     = ( null === $row->level ) ? '' : (string) $row->level;
 		$has_level = '' !== $level;
 		$index     = $has_level ? array_search( $level, TBT_Students_DB::valid_levels(), true ) : TBT_Students_DB::default_index();
 		$panel_id  = 'tbtstu-panel-' . (int) $row->user_id;
+
+		$profile       = ( ! isset( $row->profile ) || null === $row->profile ) ? '' : (string) $row->profile;
+		$has_profile   = '' !== $profile;
+		$profile_id    = 'tbtstu-profile-' . (int) $row->user_id;
+		$profile_field = 'tbtstu-profile-text-' . (int) $row->user_id;
+		$profile_used  = TBT_Students_DB::profile_length( $profile );
 		?>
 		<div class="tbtstu-student" data-student-id="<?php echo esc_attr( (int) $row->user_id ); ?>"
-			data-level="<?php echo esc_attr( $level ); ?>">
+			data-level="<?php echo esc_attr( $level ); ?>"
+			data-profile="<?php echo esc_attr( $profile ); ?>">
 			<div class="tbtstu-student-main">
 				<div class="tbtstu-student-body">
 					<div class="tbtstu-student-name"><?php echo esc_html( $row->display_name ); ?></div>
@@ -261,6 +280,24 @@ class TBT_Students_Frontend {
 					<button type="button" class="tbtstu-btn" data-role="level"
 						aria-expanded="false" aria-controls="<?php echo esc_attr( $panel_id ); ?>">
 						<?php esc_html_e( 'Level', 'tbt-students' ); ?>
+					</button>
+					<?php
+					/*
+					 * The dot says a profile has been written, so a teacher can
+					 * see at a glance which students have one without opening
+					 * every panel. The level uses a chip for this because a
+					 * level is four characters and can simply be shown; a
+					 * profile is up to 300, so the button gets a marker rather
+					 * than the text. The dot carries a hidden label — a bare
+					 * coloured circle says nothing to a screen reader.
+					 */
+					?>
+					<button type="button" class="tbtstu-btn" data-role="profile"
+						aria-expanded="false" aria-controls="<?php echo esc_attr( $profile_id ); ?>">
+						<?php esc_html_e( 'Profile', 'tbt-students' ); ?>
+						<span class="tbtstu-dot" data-role="profile-dot"<?php echo $has_profile ? '' : ' hidden'; ?>>
+							<span class="tbtstu-sr"><?php esc_html_e( 'This student has a profile', 'tbt-students' ); ?></span>
+						</span>
 					</button>
 					<?php
 					/*
@@ -299,6 +336,50 @@ class TBT_Students_Frontend {
 					<?php endforeach; ?>
 				</div>
 				<p class="tbtstu-status" data-role="status" aria-live="polite"></p>
+			</div>
+
+			<?php
+			/*
+			 * The two hints are not decoration and they are not a tooltip. The
+			 * field's contents are sent to a language model on every
+			 * generation, about a paying client who has not consented to
+			 * anything beyond being taught, so the rule that keeps the field
+			 * lawful to use is rendered next to it, always, in plain sight.
+			 */
+			?>
+			<div class="tbtstu-profile" id="<?php echo esc_attr( $profile_id ); ?>" data-role="profile-panel" hidden>
+				<label class="tbtstu-label" for="<?php echo esc_attr( $profile_field ); ?>">
+					<?php esc_html_e( 'Student profile', 'tbt-students' ); ?>
+				</label>
+				<textarea class="tbtstu-textarea" id="<?php echo esc_attr( $profile_field ); ?>"
+					data-role="profile-text" rows="3"
+					maxlength="<?php echo esc_attr( TBT_Students_DB::PROFILE_MAX ); ?>"
+				><?php echo esc_textarea( $profile ); ?></textarea>
+				<p class="tbtstu-help"><?php esc_html_e( 'Interests and context only. No names, no religion, health, ethnicity or politics.', 'tbt-students' ); ?></p>
+				<p class="tbtstu-help"><?php esc_html_e( 'Used when a tool makes examples for a one-to-one class.', 'tbt-students' ); ?></p>
+				<div class="tbtstu-profile-foot">
+					<?php
+					/*
+					 * Plain muted text the whole way, with no colour change as
+					 * the limit approaches: the textarea simply stops at 300,
+					 * so there is nothing for a warning colour to warn about.
+					 */
+					?>
+					<span class="tbtstu-count" data-role="profile-count">
+						<?php
+						printf(
+							/* translators: 1: characters used, 2: maximum characters. */
+							esc_html__( '%1$d / %2$d', 'tbt-students' ),
+							(int) $profile_used,
+							(int) TBT_Students_DB::PROFILE_MAX
+						);
+						?>
+					</span>
+					<button type="button" class="tbtstu-btn" data-role="profile-save">
+						<?php esc_html_e( 'Save', 'tbt-students' ); ?>
+					</button>
+				</div>
+				<p class="tbtstu-status" data-role="profile-status" aria-live="polite"></p>
 			</div>
 		</div>
 		<?php
@@ -371,13 +452,15 @@ class TBT_Students_Frontend {
 	 * @return array
 	 */
 	public static function student_payload( $user_id ) {
-		$user  = get_userdata( (int) $user_id );
-		$level = TBT_Students_DB::get_level( $user_id );
+		$user    = get_userdata( (int) $user_id );
+		$level   = TBT_Students_DB::get_level( $user_id );
+		$profile = TBT_Students_DB::get_profile( $user_id );
 
 		return array(
 			'user_id'      => (int) $user_id,
 			'display_name' => $user ? $user->display_name : '',
 			'level'        => $level,
+			'profile'      => $profile,
 			'letter'       => self::first_letter( $user ? $user->display_name : '' ),
 		);
 	}

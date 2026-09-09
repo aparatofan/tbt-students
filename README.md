@@ -1,8 +1,8 @@
 # TBT Students
 
-The student profile spine for the TBT suite. Version 0.1.0 does exactly two
-things: a teacher adds an existing `customer` account to their student list,
-and sets that student's CEFR level.
+The student profile spine for the TBT suite. A teacher adds an existing
+`customer` account to their student list, sets that student's CEFR level, and
+writes a short profile note about them for the rest of the suite to read.
 
 - **WordPress** 6.x, **PHP** 8.0+, Divi theme, self-hosted
 - Pure PHP + vanilla JS. No jQuery, no build tools, no CDN, everything self-hosted.
@@ -36,6 +36,9 @@ plugin's assets.
 - **Level** — opens a 25-position slider. The readout above it names the level
   and what it means; the chip under the student's name shows the saved value,
   or "No level set".
+- **Profile** — opens a short free-text field about the student. A dot on the
+  button means a profile has been written, so you can see which students have
+  one without opening every panel.
 - **Remove** — takes the student off your list. Their WordPress account is
   untouched.
 
@@ -62,6 +65,35 @@ A student with no level opens at B1, not A0 — starting at the bottom would dra
 every new student through "beginner" on the way to their real level. The chip
 stays grey until the slider is actually moved.
 
+## The student profile
+
+A short note about the student — profession, family, interests — so that
+generated material can be written for that person rather than for nobody. Other
+TBT plugins read it and pass it to the model when they make examples for a
+one-to-one class.
+
+**Contexts and interests only.** Names, religion or belief, health conditions,
+ethnicity, sexual orientation and political opinions must not go in this field.
+They are special-category personal data under GDPR, they concern a paying
+client who has not consented to it, and the contents are transmitted to OpenAI
+on every generation. The rule is printed beside the field, always visible
+whenever the panel is open, because that hint is the control that makes the
+field lawful to use — not documentation, and not a tooltip.
+
+The plugin does not attempt to detect or block prohibited content. A filter
+that half-worked would imply a guarantee that does not exist.
+
+- Capped at **300 characters**, counted as characters rather than bytes, so
+  Polish diacritics cost the same as ASCII. The textarea stops at 300 and a
+  live counter shows `n / 300`; the server rejects anything longer, which can
+  only be a request that did not come from the page.
+- Saved by an explicit **Save**, never on blur.
+- Clearing the field and saving stores `NULL`. "No profile written" is a real
+  state, distinct from an empty string — the same distinction `level` makes.
+- Stored in `profile VARCHAR(400)`, four hundred rather than three so a future
+  cap change has room. The column arrived in schema version `2`; `dbDelta`
+  adds it to an existing install without touching existing rows.
+
 ## Public read API
 
 The one supported way for another plugin to ask for a student's level:
@@ -70,13 +102,26 @@ The one supported way for another plugin to ask for a student's level:
 $level = TBT_Students::get_level( $user_id ); // 'B1.5', or '' if none is set
 ```
 
-and the filter behind it, for supplying or overriding the value from elsewhere:
+and for the profile note:
+
+```php
+$profile = TBT_Students::get_profile( $user_id ); // '' if none is written
+```
+
+and the filters behind them, for supplying or overriding the values from
+elsewhere:
 
 ```php
 apply_filters( 'tbt_student_level', $level, $user_id );
+apply_filters( 'tbt_student_profile', $profile, $user_id );
 ```
 
-There is no write API. Levels are set by a teacher on the page.
+Both return `''` for a user who is not a listed student, so a consumer that
+forgets to check gets an empty string rather than a fatal on a null.
+
+There is no write API. Levels and profiles are set by a teacher on the page,
+and a second way in would be a second place for the scale and the character cap
+to be enforced.
 
 ## Permissions
 
