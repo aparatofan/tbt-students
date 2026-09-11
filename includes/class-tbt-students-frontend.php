@@ -129,13 +129,25 @@ class TBT_Students_Frontend {
 					'clearSkill'     => __( 'Clear %s', 'tbt-students' ),
 					/* translators: %s: skill name, e.g. Listening */
 					'skillAria'      => __( '%s level', 'tbt-students' ),
-					// The filter bar.
+					// The library toolbar.
 					/* translators: 1: students shown, 2: students in the list. */
 					'countLine'      => __( '%1$d of %2$d students', 'tbt-students' ),
+					'clearFilters'   => __( 'Clear filters', 'tbt-students' ),
 					'noMatch'        => __( 'No students match.', 'tbt-students' ),
-					'noStudents'     => __( 'No students yet. Search above to add your first one.', 'tbt-students' ),
-					// Sentence case, and no glyph in the string: the plus is drawn,
-					// not typed, so it matches the stroke weight beside it.
+					'noStudents'     => __( 'No students yet. Add your first one.', 'tbt-students' ),
+					// The group heads, which only a grouped sort draws. The band
+					// head is two pieces the translator orders for themselves;
+					// 'noLevel' above is reused as the level sort's last head.
+					/* translators: %d: number of students in a group. */
+					'groupOne'       => __( '%d student', 'tbt-students' ),
+					/* translators: %d: number of students in a group. */
+					'groupMany'      => __( '%d students', 'tbt-students' ),
+					/* translators: 1: CEFR band code, e.g. B1. 2: band name, e.g. intermediate. */
+					'bandGroup'      => __( '%1$s · %2$s', 'tbt-students' ),
+					'notInClass'     => __( 'Not in a class', 'tbt-students' ),
+					// Sentence case here, uppercase on screen: the toolbar CTA is
+					// upper-cased in CSS, so a translator is never handed a
+					// shouted string to translate.
 					'addShow'        => __( 'Add a student', 'tbt-students' ),
 					'addHide'        => __( 'Close', 'tbt-students' ),
 				),
@@ -213,70 +225,93 @@ class TBT_Students_Frontend {
 
 			<div class="tbtstu-notice tbtstu-notice--error" data-role="error" hidden></div>
 
-			<div class="tbtstu-section-head">
-				<span class="tbtstu-section-title"><?php esc_html_e( 'Your students', 'tbt-students' ); ?></span>
-				<span class="tbtstu-rule"></span>
-			</div>
-
 			<?php
 			/*
-			 * The filter box, not the letter groups, is how a teacher finds a
-			 * student now. It is `type="text"` rather than `type="search"` on
-			 * purpose: every engine draws the search input's clear affordance
-			 * differently and none of them can be styled to match the rest of
-			 * this page.
+			 * The library toolbar — the shared TBT pattern. One row: the title,
+			 * the search box, the Sort dropdown, and the one button on this page
+			 * that creates something.
 			 *
-			 * Filtering is entirely client-side over rows already on the page —
-			 * there is no request behind it, and no state to keep on the server.
+			 * Search is `type="text"` rather than `type="search"` on purpose:
+			 * every engine draws the search input's clear affordance differently
+			 * and none of them can be styled to match the rest of this page, so
+			 * the toolbar supplies its own ×.
+			 *
+			 * Searching and sorting are both entirely client-side over rows
+			 * already on the page — there is no request behind either, and no
+			 * state to keep on the server. The sort is not remembered between
+			 * visits: every page load opens on Sort by name.
+			 *
+			 * Sorting GROUPS the list; it never hides anyone. That is why the
+			 * dropdown has no selected state — blue on this page means something
+			 * is hidden, and only the search box can do that.
 			 */
+			$has_classes = self::classes_available();
+			$is_empty    = 0 === $total;
 			?>
-			<div class="tbtstu-filter">
-				<label class="tbtstu-label" for="tbtstu-filter"><?php esc_html_e( 'Filter your students', 'tbt-students' ); ?></label>
-				<div class="tbtstu-filter-row">
-					<input type="text" id="tbtstu-filter" class="tbtstu-input" data-role="filter"
-						autocomplete="off" spellcheck="false"
-						placeholder="<?php esc_attr_e( 'Type a name or email…', 'tbt-students' ); ?>">
-					<button type="button" class="tbtstu-toggle" data-role="filter-nolevel" aria-pressed="false">
-						<?php esc_html_e( 'No level set', 'tbt-students' ); ?>
-					</button>
-				</div>
-				<p class="tbtstu-count-line" data-role="filter-count" aria-live="polite">
+			<div class="tbtstu-libbar<?php echo $is_empty ? ' is-empty' : ''; ?>" data-role="libbar">
+				<div class="tbtstu-libbar__title">
+					<span class="tbtstu-section-title"><?php esc_html_e( 'Your students', 'tbt-students' ); ?></span>
 					<?php
-					printf(
-						/* translators: 1: students shown, 2: students in the list. */
-						esc_html__( '%1$d of %2$d students', 'tbt-students' ),
-						(int) $total,
-						(int) $total
-					);
+					/*
+					 * The rule line only exists to close an otherwise empty row.
+					 * With students on the page the search box and the sort fill
+					 * it instead, so JS swaps the two as the list empties and
+					 * fills — see applyView() in frontend.js.
+					 */
 					?>
-				</p>
-			</div>
+					<span class="tbtstu-rule" data-role="libbar-rule"<?php echo $is_empty ? '' : ' hidden'; ?>></span>
+				</div>
 
-			<?php
-			/*
-			 * Adding a student is the occasional act; finding one is the daily
-			 * one. So the search box starts collapsed behind a quiet toggle,
-			 * below the filter, and everything inside it is exactly what it was.
-			 */
-			?>
-			<button type="button" class="tbtstu-btn tbtstu-btn--primary" data-role="add-toggle"
-				aria-expanded="false" aria-controls="tbtstu-add">
+				<div class="tbtstu-libbar__filter" role="search" data-role="libbar-filter"<?php echo $is_empty ? ' hidden' : ''; ?>>
+					<div class="tbtstu-libbar__search">
+						<label class="tbtstu-sr" for="tbtstu-filter"><?php esc_html_e( 'Search your students', 'tbt-students' ); ?></label>
+						<svg class="tbtstu-libbar__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+							<circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2.2"/>
+							<path d="m20 20-3.6-3.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+						</svg>
+						<input type="text" id="tbtstu-filter" class="tbtstu-input tbtstu-libbar__input" data-role="filter"
+							autocomplete="off" spellcheck="false"
+							placeholder="<?php echo esc_attr( $has_classes ? __( 'Search by name, email or class', 'tbt-students' ) : __( 'Search by name or email', 'tbt-students' ) ); ?>">
+						<button type="button" class="tbtstu-libbar__clear" data-role="filter-clear"
+							aria-label="<?php esc_attr_e( 'Clear search', 'tbt-students' ); ?>" hidden>&times;</button>
+					</div>
+
+					<label class="tbtstu-sr" for="tbtstu-sort"><?php esc_html_e( 'Sort students', 'tbt-students' ); ?></label>
+					<select id="tbtstu-sort" class="tbtstu-libbar__select" data-role="sort">
+						<option value="name"><?php esc_html_e( 'Sort by name', 'tbt-students' ); ?></option>
+						<option value="level"><?php esc_html_e( 'Sort by level', 'tbt-students' ); ?></option>
+						<?php if ( $has_classes ) : ?>
+							<option value="class"><?php esc_html_e( 'Sort by class', 'tbt-students' ); ?></option>
+						<?php endif; ?>
+					</select>
+				</div>
+
 				<?php
 				/*
-				 * A drawn plus rather than a "+" character, which would not
-				 * match the stroke weight of anything beside it. Decorative:
-				 * the label next to it is what the button is called.
-				 *
-				 * Opening the block swaps this for the plain pill and the word
+				 * The CTA carries its label as plain text: JS repaints it on
+				 * open and close, where it becomes the outline pill and reads
 				 * "Close" — see paintAddToggle() in frontend.js, which builds
 				 * the same two states.
 				 */
 				?>
-				<svg class="tbtstu-btn-icon" viewBox="0 0 24 24" width="14" height="14"
-					fill="none" stroke="currentColor" stroke-width="2.4"
-					stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-				<span><?php esc_html_e( 'Add a student', 'tbt-students' ); ?></span>
-			</button>
+				<button type="button" class="tbtstu-btn tbtstu-btn--primary tbtstu-libbar__cta" data-role="add-toggle"
+					aria-expanded="false" aria-controls="tbtstu-add">
+					<?php esc_html_e( 'Add a student', 'tbt-students' ); ?>
+				</button>
+			</div>
+
+			<?php
+			/*
+			 * The summary appears only while the teacher is searching: a count
+			 * that is always on the page is a count nobody reads, and "24 of 24"
+			 * says nothing. Clear filters empties the search box and leaves the
+			 * sort exactly as it was — the two are not one control.
+			 */
+			?>
+			<p class="tbtstu-libbar__summary" data-role="summary" aria-live="polite" hidden>
+				<span data-role="summary-text"></span>
+				<button type="button" class="tbtstu-libbar__link" data-role="filter-reset"><?php esc_html_e( 'Clear filters', 'tbt-students' ); ?></button>
+			</p>
 
 			<div class="tbtstu-add" id="tbtstu-add" hidden>
 				<label class="tbtstu-label" for="tbtstu-search"><?php esc_html_e( 'Add a student', 'tbt-students' ); ?></label>
@@ -292,7 +327,11 @@ class TBT_Students_Frontend {
 			/*
 			 * Flat and alphabetical. The rows arrive from for_teacher() already
 			 * in Polish alphabetical order — Ł after L, not folded into it — and
-			 * nothing here re-sorts them: the collation lives in one place.
+			 * PHP decides the first paint: applyView() in frontend.js leaves this
+			 * order alone while the sort is "by name" and nothing has regrouped
+			 * the list. The browser's Polish collator orders rows only after a
+			 * sort change or an insert, which is what insertStudent() has always
+			 * done.
 			 */
 			?>
 			<div class="tbtstu-list" data-role="list">
@@ -309,7 +348,7 @@ class TBT_Students_Frontend {
 			 */
 			?>
 			<div class="tbtstu-empty" data-role="empty"<?php echo empty( $students ) ? '' : ' hidden'; ?>>
-				<?php esc_html_e( 'No students yet. Search above to add your first one.', 'tbt-students' ); ?>
+				<?php esc_html_e( 'No students yet. Add your first one.', 'tbt-students' ); ?>
 			</div>
 
 		</div>
@@ -323,6 +362,33 @@ class TBT_Students_Frontend {
 		self::enqueue();
 
 		return $html;
+	}
+
+	/**
+	 * Is TBT Notes present and able to name a student's class?
+	 *
+	 * Optional and read-only: Students never writes to Notes and never reads its
+	 * tables directly. With Notes inactive, the class sort and the class search
+	 * simply are not offered.
+	 *
+	 * @return bool
+	 */
+	public static function classes_available() {
+		return class_exists( 'TBT_Notes_DB' ) && method_exists( 'TBT_Notes_DB', 'get_class_for_student' );
+	}
+
+	/**
+	 * The title of the Notes class a student belongs to, or '' for none.
+	 *
+	 * @param int $user_id Student user ID.
+	 * @return string
+	 */
+	public static function class_title( $user_id ) {
+		if ( ! self::classes_available() ) {
+			return '';
+		}
+		$class = TBT_Notes_DB::get_class_for_student( (int) $user_id );
+		return ( is_array( $class ) && isset( $class['title'] ) ) ? (string) $class['title'] : '';
 	}
 
 	/**
@@ -379,13 +445,14 @@ class TBT_Students_Frontend {
 		$has_profile = '' !== $profile;
 		$profile_id  = 'tbtstu-profile-' . (int) $row->user_id;
 
-		// The filter matches on the email as well as the name; the list itself
-		// never shows it.
+		// The search matches on the email and the Notes class as well as the
+		// name; the list itself shows neither.
 		$email = isset( $row->email ) ? (string) $row->email : '';
 		?>
 		<div class="tbtstu-student <?php echo esc_attr( self::colour_class( $row->user_id ) ); ?>"
 			data-student-id="<?php echo esc_attr( (int) $row->user_id ); ?>"
 			data-email="<?php echo esc_attr( $email ); ?>"
+			data-class="<?php echo esc_attr( self::class_title( $row->user_id ) ); ?>"
 			data-level="<?php echo esc_attr( $level ); ?>"
 			data-level-manual="<?php echo esc_attr( $levels['level_manual'] ? '1' : '0' ); ?>"
 			<?php foreach ( $levels['skills'] as $key => $value ) : ?>
@@ -456,9 +523,10 @@ class TBT_Students_Frontend {
 		return array(
 			'user_id'      => (int) $user_id,
 			'display_name' => $user ? $user->display_name : '',
-			// The filter matches on the email as well as the name, so the row
-			// has to carry it — the list itself never shows it.
+			// The search matches on the email and the Notes class as well as
+			// the name, so the row has to carry both — the list shows neither.
 			'email'        => $user ? $user->user_email : '',
+			'class'        => self::class_title( $user_id ),
 			'level'        => $levels['level'],
 			'level_manual' => $levels['level_manual'],
 			'skills'       => $levels['skills'],

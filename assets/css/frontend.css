@@ -60,61 +60,94 @@
   margin: 0 !important; border: 0; box-shadow: none;
 }
 
-/* ---------- Section head ---------- */
-.tbtstu-section-head { display: flex; align-items: baseline; gap: var(--tbtstu-s4); margin-bottom: var(--tbtstu-s5); }
+/* ---------- Library toolbar (0.4.0) — shared TBT pattern ----------
+   One row: the title, the search box, the Sort dropdown, and the CTA. The
+   geometry matches the other tools in the suite exactly. */
 .tbtstu-section-title {
   font-family: var(--tbtstu-display); font-size: 28px; font-weight: 700;
   color: var(--tbtstu-blue); letter-spacing: -.01em;
 }
 .tbtstu-rule { flex: 1; height: 2px; background-color: var(--tbtstu-border); }
 
-/* ---------- Filter bar ----------
-   The list is flat and alphabetical now, so this is how a teacher finds one
-   student among many. It sits above the list and above the search box: finding
-   is the daily act, adding is the occasional one. */
-.tbtstu-filter { margin-bottom: var(--tbtstu-s5); max-width: 720px; }
-.tbtstu-filter-row { display: flex; align-items: center; gap: var(--tbtstu-s3); flex-wrap: wrap; }
-.tbtstu-filter-row .tbtstu-input { flex: 1 1 260px; }
+.tbtstu-libbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--tbtstu-s4); margin-bottom: var(--tbtstu-s5);
+}
+.tbtstu-libbar__title { display: flex; align-items: center; gap: var(--tbtstu-s4); flex: 0 0 auto; }
+/* Empty list: the title and its rule take the row, the CTA closes it. */
+.tbtstu-libbar.is-empty .tbtstu-libbar__title { flex: 1 1 260px; }
+.tbtstu-libbar__filter { display: flex; align-items: center; gap: var(--tbtstu-s3); flex: 1 1 480px; min-width: 0; }
+.tbtstu-libbar__search { position: relative; flex: 1 1 320px; min-width: 0; }
+.tbtstu-libbar__icon {
+  position: absolute; left: var(--tbtstu-s4); top: 50%; transform: translateY(-50%);
+  color: var(--tbtstu-blue); pointer-events: none;
+}
+/* .tbtstu-input pins its padding, so this pins too, one class more specific,
+   to make room for the icon and the clear button. */
+.tbtstu .tbtstu-libbar__search .tbtstu-libbar__input { padding-left: 46px !important; padding-right: 44px !important; }
+.tbtstu-libbar__clear {
+  position: absolute; right: var(--tbtstu-s2); top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--tbtstu-r-sm);
+  background: transparent; color: var(--tbtstu-muted); font-size: 20px; line-height: 1; cursor: pointer;
+}
+.tbtstu-libbar__clear:hover { background: var(--tbtstu-blue-wash); color: var(--tbtstu-blue); }
+.tbtstu-libbar__clear:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--tbtstu-surface), 0 0 0 4px var(--tbtstu-blue); }
 
-/* A pressed-state pill. Pinned for the reason every other button here is: the
-   theme sizes bare buttons from its own box rather than from the label. */
-.tbtstu .tbtstu-toggle {
-  display: inline-flex !important; align-items: center; justify-content: center;
-  width: auto !important; min-width: 0 !important; max-width: 100% !important;
-  height: auto !important; min-height: 0 !important; aspect-ratio: auto !important;
-  background-color: var(--tbtstu-surface) !important;
-  color: var(--tbtstu-muted) !important;
+/* The Sort dropdown: input geometry, a drawn chevron, and deliberately no
+   selected state — sorting hides nothing, so it never turns blue. */
+.tbtstu .tbtstu-libbar__select {
+  display: block !important; flex: 0 1 300px; min-width: 200px; width: auto !important; max-width: 100% !important;
+  background-color: var(--tbtstu-tint) !important;
   border: 1.5px solid var(--tbtstu-border) !important;
-  border-radius: var(--tbtstu-r-pill) !important;
-  padding: 9px var(--tbtstu-s4) !important;
-  font-family: var(--tbtstu-display) !important; font-weight: 600;
-  font-size: 14px !important; line-height: 1.2 !important;
-  letter-spacing: .01em; text-transform: none; text-decoration: none !important;
-  white-space: nowrap !important; text-indent: 0; cursor: pointer;
-  transition: border-color .16s var(--tbtstu-ease), background-color .16s var(--tbtstu-ease), color .16s var(--tbtstu-ease);
+  border-radius: var(--tbtstu-r-ctl) !important;
+  padding: 13px 48px 13px var(--tbtstu-s4) !important;
+  font-family: var(--tbtstu-body) !important; font-size: 16px !important;
+  line-height: 1.4 !important; color: var(--tbtstu-ink) !important;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  /* The one literal colour: a data URI cannot read a custom property. Brand blue. */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%230856C9' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right var(--tbtstu-s4) center !important;
+  transition: border-color .18s var(--tbtstu-ease), background-color .18s var(--tbtstu-ease), box-shadow .18s var(--tbtstu-ease);
 }
-.tbtstu .tbtstu-toggle:hover { border-color: var(--tbtstu-periwinkle) !important; }
-.tbtstu .tbtstu-toggle.is-on {
-  background-color: var(--tbtstu-blue-wash) !important;
-  border-color: var(--tbtstu-blue) !important;
-  color: var(--tbtstu-blue) !important;
-}
-
-/* Tabular figures so the number does not jitter as the teacher types. */
-.tbtstu-count-line {
-  font-size: 13px; color: var(--tbtstu-muted);
-  font-variant-numeric: tabular-nums; margin-top: var(--tbtstu-s2) !important;
+.tbtstu .tbtstu-libbar__select:hover { border-color: var(--tbtstu-periwinkle) !important; }
+.tbtstu .tbtstu-libbar__select:focus {
+  outline: none; background-color: var(--tbtstu-surface) !important;
+  border-color: var(--tbtstu-blue) !important; box-shadow: 0 0 0 4px var(--tbtstu-blue-wash);
 }
 
-/* ---------- Add a student ----------
-   Collapsed behind a primary pill. Spacing only here: the button itself is
-   .tbtstu-btn--primary when closed and the plain pill when open, and it is
-   addressed by its role rather than by a class so the class list stays exactly
-   the two the button carries. The gap below it does the work of the block's own
-   bottom margin while the block is closed. */
-[data-role="add-toggle"][aria-expanded="false"] { margin-bottom: var(--tbtstu-s6); }
-[data-role="add-toggle"][aria-expanded="true"] { margin-bottom: var(--tbtstu-s3); }
+/* The library CTA: the shared toolbar rule — uppercase, interface face, wider
+   pill. Colours still come from .tbtstu-btn--primary (closed) and .tbtstu-btn
+   (open, "Close"). */
+.tbtstu .tbtstu-libbar__cta {
+  flex: 0 0 auto;
+  font-family: var(--tbtstu-body) !important; font-weight: 600;
+  font-size: 16px !important; letter-spacing: .08em; text-transform: uppercase;
+  padding: 17px 48px !important;
+}
 
+.tbtstu-libbar__summary { font-size: 15px; color: var(--tbtstu-muted); margin: calc(-1 * var(--tbtstu-s2)) 0 var(--tbtstu-s5) !important; }
+.tbtstu .tbtstu-libbar__link {
+  display: inline; border: 0; background: none; padding: 0; margin-left: var(--tbtstu-s2); cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--tbtstu-blue) !important;
+  text-decoration: underline !important; text-underline-offset: 3px;
+}
+.tbtstu .tbtstu-libbar__link:focus-visible { outline: 2px solid var(--tbtstu-blue); outline-offset: 2px; border-radius: 2px; }
+
+/* ---------- Sort groups ----------
+   Heads exist only while sorted by level or class; JS inserts them between
+   rows, so the list's own markup is unchanged. */
+.tbtstu-group-head { display: flex; align-items: baseline; gap: var(--tbtstu-s3); margin: var(--tbtstu-s6) 0 var(--tbtstu-s4); }
+.tbtstu-group-head:first-child { margin-top: 0; }
+.tbtstu-group-name { font-family: var(--tbtstu-display); font-size: 19px; font-weight: 600; color: var(--tbtstu-ink-deep); }
+.tbtstu-group-count { font-size: 15px; color: var(--tbtstu-muted); font-variant-numeric: tabular-nums; }
+.tbtstu-group-head .tbtstu-rule { align-self: center; }
+
+@media (max-width: 900px) {
+  /* Title and Add share the first line; search and sort take a full second line. */
+  .tbtstu-libbar__filter { order: 3; flex-basis: 100%; }
+}
+
+/* ---------- Add a student ---------- */
 .tbtstu-add { position: relative; margin-bottom: var(--tbtstu-s7); max-width: 560px; }
 .tbtstu-label {
   display: block; font-family: var(--tbtstu-display);
@@ -297,14 +330,6 @@
 .tbtstu .tbtstu-btn--danger:hover {
   background-color: var(--tbtstu-danger-hover-bg) !important;
   border-color: var(--tbtstu-danger) !important;
-}
-
-/* The glyph inside a button. Width and height are pinned because the theme
-   styles bare <svg>, and a themed svg stretched to the button's width is the
-   whole label pushed off the end. */
-.tbtstu .tbtstu-btn-icon {
-  width: 14px !important; height: 14px !important;
-  flex: none; margin-right: var(--tbtstu-s2);
 }
 
 /* "This student has a profile", said in the smallest way that still reads
@@ -570,6 +595,9 @@
 /* ---------- Responsive ---------- */
 @media (max-width: 580px) {
   .tbtstu-hero { grid-template-columns: 1fr; gap: 16px; padding: 21px 19px; border-radius: 17px; }
+  /* Search keeps the line; the sort drops below it at full width. */
+  .tbtstu-libbar__filter { flex-wrap: wrap; }
+  .tbtstu .tbtstu-libbar__select { flex-basis: 100%; }
   .tbtstu-student { padding: var(--tbtstu-s4); }
   /* The actions drop under the name rather than squeezing beside it, with
      Remove still last. */

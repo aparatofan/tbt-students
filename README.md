@@ -30,18 +30,32 @@ plugin's assets.
 [tbt_students]
 ```
 
-- **Filter your students** — a text box over your own list, matching on display
-  name **and** email, case-insensitively. It is accent-sensitive on purpose:
-  typing `Ł` finds `Łukasz` and not `Lukasz`, because a teacher who reaches for
-  that key means it. Beside it, a **No level set** toggle keeps only students
-  who have no overall level; it ANDs with the text box. A count reads
-  `n of m students`. All of it is client-side over rows already on the page —
-  no request, no waiting.
-- **+ Add a student** — collapsed by default. Open it and type a username, name
-  or email; matching `customer` accounts appear under the box, and clicking one
-  adds them to your list. Accounts already on a list are not offered. The block
-  stays open after an add, because adding two students in a row is the common
-  case.
+- **The library toolbar** — one row: the title, a search box, a **Sort**
+  dropdown, and **ADD A STUDENT**. `/` anywhere outside a field focuses the
+  search.
+- **Search** — matches display name, email **and** the student's TBT Notes
+  class, case-insensitively. It is accent-sensitive on purpose: typing `Ł`
+  finds `Łukasz` and not `Lukasz`, because a teacher who reaches for that key
+  means it. While you are searching, a summary reads `n of m students` with a
+  **Clear filters** link beside it; `Esc` and the `×` in the box do the same
+  thing. Clearing the search leaves the sort alone.
+- **Sort** — **by name** (the default on every page load), **by level** or **by
+  class**. Sorting groups the list; it never hides anyone. By level the groups
+  run in scale order, headed `B1 · intermediate` with a count, and students with
+  no level form a last group, **No level set**. By class the groups run
+  alphabetically by class title, with **Not in a class** last. Within every
+  group the order is alphabetical. The choice is not remembered between visits.
+  All of it — search and sort alike — is client-side over rows already on the
+  page: no request, no waiting. **Sort by class** needs TBT Notes installed and
+  active; without it the option is not offered, the search matches name and
+  email only, and nothing else changes. The bridge is optional and read-only —
+  Students never writes to Notes.
+- **ADD A STUDENT** — the toolbar's one creating control, collapsed by default.
+  Open it and type a username, name or email; matching `customer` accounts
+  appear under the box, and clicking one adds them to your list. Accounts
+  already on a list are not offered. The button reads **CLOSE** while the block
+  is open, and the block stays open after an add, because adding two students in
+  a row is the common case.
 - **The list** — flat and alphabetical in Polish order, with no letter groups.
   `Ł` is its own letter and sorts after `L`. Each card carries a soft
   domain-colour wash — see [Card colours](#card-colours).
