@@ -60,24 +60,31 @@
   margin: 0 !important; border: 0; box-shadow: none;
 }
 
-/* ---------- Library toolbar (0.4.0) — shared TBT pattern ----------
-   One row: the title, the search box, the Sort dropdown, and the CTA. The
-   geometry matches the other tools in the suite exactly. */
+/* ---------- Library toolbar: the title and the group-head rule ---------- */
 .tbtstu-section-title {
   font-family: var(--tbtstu-display); font-size: 28px; font-weight: 700;
   color: var(--tbtstu-blue); letter-spacing: -.01em;
 }
 .tbtstu-rule { flex: 1; height: 2px; background-color: var(--tbtstu-border); }
 
+/* ---------- Admin Bar v2 (0.4.1) — Mariusz's TBT_ADMIN_BAR board ----------
+   One row joined by a thin line: title ─ search ─ sort ─ button, 10px either
+   side of each item. Fixed widths (300 / 300 / 250) so the bar reads the same
+   on every tool; the lines take what is left. */
 .tbtstu-libbar {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: var(--tbtstu-s4); margin-bottom: var(--tbtstu-s5);
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 10px; margin-bottom: var(--tbtstu-s5);
 }
-.tbtstu-libbar__title { display: flex; align-items: center; gap: var(--tbtstu-s4); flex: 0 0 auto; }
-/* Empty list: the title and its rule take the row, the CTA closes it. */
-.tbtstu-libbar.is-empty .tbtstu-libbar__title { flex: 1 1 260px; }
-.tbtstu-libbar__filter { display: flex; align-items: center; gap: var(--tbtstu-s3); flex: 1 1 480px; min-width: 0; }
-.tbtstu-libbar__search { position: relative; flex: 1 1 320px; min-width: 0; }
+/* The title zone is at least 234px, so the search always starts 244px in. */
+.tbtstu-libbar__title { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; min-width: 234px; }
+.tbtstu-libbar__line { flex: 1 1 0; min-width: 0; height: 1px; background-color: var(--tbtstu-border); }
+/* The filter group grows by the same share as the end line, so the two gaps
+   (search→sort, sort→button) stay equal. */
+.tbtstu-libbar__filter { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
+.tbtstu-libbar__search { position: relative; flex: 0 0 300px; min-width: 0; }
+/* Empty list: the title's line runs to the button on its own. */
+.tbtstu-libbar.is-empty .tbtstu-libbar__title { flex: 1 1 auto; }
+.tbtstu-libbar.is-empty .tbtstu-libbar__line--end { display: none; }
 .tbtstu-libbar__icon {
   position: absolute; left: var(--tbtstu-s4); top: 50%; transform: translateY(-50%);
   color: var(--tbtstu-blue); pointer-events: none;
@@ -96,7 +103,7 @@
 /* The Sort dropdown: input geometry, a drawn chevron, and deliberately no
    selected state — sorting hides nothing, so it never turns blue. */
 .tbtstu .tbtstu-libbar__select {
-  display: block !important; flex: 0 1 300px; min-width: 200px; width: auto !important; max-width: 100% !important;
+  display: block !important; flex: 0 0 300px; min-width: 0; width: 300px !important; max-width: 100% !important;
   background-color: var(--tbtstu-tint) !important;
   border: 1.5px solid var(--tbtstu-border) !important;
   border-radius: var(--tbtstu-r-ctl) !important;
@@ -113,16 +120,6 @@
 .tbtstu .tbtstu-libbar__select:focus {
   outline: none; background-color: var(--tbtstu-surface) !important;
   border-color: var(--tbtstu-blue) !important; box-shadow: 0 0 0 4px var(--tbtstu-blue-wash);
-}
-
-/* The library CTA: the shared toolbar rule — uppercase, interface face, wider
-   pill. Colours still come from .tbtstu-btn--primary (closed) and .tbtstu-btn
-   (open, "Close"). */
-.tbtstu .tbtstu-libbar__cta {
-  flex: 0 0 auto;
-  font-family: var(--tbtstu-body) !important; font-weight: 600;
-  font-size: 16px !important; letter-spacing: .08em; text-transform: uppercase;
-  padding: 17px 48px !important;
 }
 
 .tbtstu-libbar__summary { font-size: 15px; color: var(--tbtstu-muted); margin: calc(-1 * var(--tbtstu-s2)) 0 var(--tbtstu-s5) !important; }
@@ -142,9 +139,13 @@
 .tbtstu-group-count { font-size: 15px; color: var(--tbtstu-muted); font-variant-numeric: tabular-nums; }
 .tbtstu-group-head .tbtstu-rule { align-self: center; }
 
-@media (max-width: 900px) {
-  /* Title and Add share the first line; search and sort take a full second line. */
+@media (max-width: 1100px) {
+  /* Too narrow for the joined row: title and button share the first line,
+     search and sort take the second, and the lines step aside. */
+  .tbtstu-libbar__line { display: none; }
+  .tbtstu-libbar__title { flex: 1 1 auto; min-width: 0; }
   .tbtstu-libbar__filter { order: 3; flex-basis: 100%; }
+  .tbtstu-libbar__search { flex: 1 1 auto; }
 }
 
 /* ---------- Add a student ---------- */
@@ -314,6 +315,22 @@
 .tbtstu .tbtstu-btn--primary:hover {
   background-color: var(--tbtstu-blue-deep) !important;
   border-color: var(--tbtstu-blue-deep) !important;
+}
+
+/* The Admin Bar CTA. Two classes after .tbtstu so it outranks the base pill,
+   and declared after it; pinned wherever the base pill pins. Uppercase
+   interface face, fixed 250 × 53 so the bar is identical on every tool.
+   Colours still come from .tbtstu-btn--primary (closed) and .tbtstu-btn
+   (open, "Close"). */
+.tbtstu .tbtstu-btn.tbtstu-libbar__cta {
+  flex: 0 0 250px;
+  width: 250px !important; max-width: 250px !important;
+  min-height: 53px !important;
+  padding: 0 16px !important;
+  font-family: var(--tbtstu-body) !important; font-weight: 600;
+  font-size: 16px !important; line-height: 1.2 !important;
+  letter-spacing: .08em !important; text-transform: uppercase !important;
+  box-shadow: none !important;
 }
 
 /* The danger pill — Remove, and nothing else. A pale red surface rather than a
@@ -597,7 +614,7 @@
   .tbtstu-hero { grid-template-columns: 1fr; gap: 16px; padding: 21px 19px; border-radius: 17px; }
   /* Search keeps the line; the sort drops below it at full width. */
   .tbtstu-libbar__filter { flex-wrap: wrap; }
-  .tbtstu .tbtstu-libbar__select { flex-basis: 100%; }
+  .tbtstu .tbtstu-libbar__select { flex-basis: 100%; width: 100% !important; }
   .tbtstu-student { padding: var(--tbtstu-s4); }
   /* The actions drop under the name rather than squeezing beside it, with
      Remove still last. */

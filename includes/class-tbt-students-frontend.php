@@ -252,14 +252,9 @@ class TBT_Students_Frontend {
 				<div class="tbtstu-libbar__title">
 					<span class="tbtstu-section-title"><?php esc_html_e( 'Your students', 'tbt-students' ); ?></span>
 					<?php
-					/*
-					 * The rule line only exists to close an otherwise empty row.
-					 * With students on the page the search box and the sort fill
-					 * it instead, so JS swaps the two as the list empties and
-					 * fills — see applyView() in frontend.js.
-					 */
+					/* The line joins the title to the next item; in an empty list it runs to the button. */
 					?>
-					<span class="tbtstu-rule" data-role="libbar-rule"<?php echo $is_empty ? '' : ' hidden'; ?>></span>
+					<span class="tbtstu-libbar__line" aria-hidden="true"></span>
 				</div>
 
 				<div class="tbtstu-libbar__filter" role="search" data-role="libbar-filter"<?php echo $is_empty ? ' hidden' : ''; ?>>
@@ -276,6 +271,8 @@ class TBT_Students_Frontend {
 							aria-label="<?php esc_attr_e( 'Clear search', 'tbt-students' ); ?>" hidden>&times;</button>
 					</div>
 
+					<span class="tbtstu-libbar__line" aria-hidden="true"></span>
+
 					<label class="tbtstu-sr" for="tbtstu-sort"><?php esc_html_e( 'Sort students', 'tbt-students' ); ?></label>
 					<select id="tbtstu-sort" class="tbtstu-libbar__select" data-role="sort">
 						<option value="name"><?php esc_html_e( 'Sort by name', 'tbt-students' ); ?></option>
@@ -285,6 +282,8 @@ class TBT_Students_Frontend {
 						<?php endif; ?>
 					</select>
 				</div>
+
+				<span class="tbtstu-libbar__line tbtstu-libbar__line--end" aria-hidden="true"></span>
 
 				<?php
 				/*

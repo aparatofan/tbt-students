@@ -312,7 +312,6 @@
 			sort: app.querySelector( '[data-role="sort"]' ),
 			libbar: app.querySelector( '[data-role="libbar"]' ),
 			libbarFilter: app.querySelector( '[data-role="libbar-filter"]' ),
-			libbarRule: app.querySelector( '[data-role="libbar-rule"]' ),
 			summary: app.querySelector( '[data-role="summary"]' ),
 			summaryText: app.querySelector( '[data-role="summary-text"]' ),
 			addToggle: app.querySelector( '[data-role="add-toggle"]' ),
@@ -587,17 +586,14 @@
 		}
 
 		// An empty list has nothing to search and nothing to sort, so the
-		// toolbar gives the row back to the title and its rule. Both halves
-		// return the moment the first student is added — no reload.
+		// toolbar hands the row back to the title. It returns the moment the
+		// first student is added — no reload.
 		var isEmpty = ! rows.length;
 		if ( ui.libbar ) {
 			ui.libbar.classList.toggle( 'is-empty', isEmpty );
 		}
 		if ( ui.libbarFilter ) {
 			ui.libbarFilter.hidden = isEmpty;
-		}
-		if ( ui.libbarRule ) {
-			ui.libbarRule.hidden = ! isEmpty;
 		}
 	}
 
