@@ -6,8 +6,11 @@
 
    Two things this file owns that the server cannot:
 
-   - Filtering. Pure client-side over rows already in the DOM. No request, no
-     server state, and no wait between a keystroke and the list narrowing.
+   - The view. Searching and sorting, both pure client-side over rows already
+     in the DOM. No request, no server state, and no wait between a keystroke
+     and the list narrowing. PHP still decides the first paint: applyView()
+     leaves the server's order alone until a grouped sort has actually moved
+     something.
    - The panels. Nothing renders a level or profile panel until the teacher
      opens one, and closing it removes it again. A teacher who opens twenty
      students in a session should not be carrying twenty panels; the row holds
@@ -67,11 +70,6 @@
 			'M14.5 7.5 17.5 10.5'
 		]
 	};
-
-	/* The plus on the Add a student button. A drawn glyph rather than a "+"
-	   character, which would not match the stroke weight of anything beside
-	   it. */
-	var PLUS_ICON = [ 'M12 5v14M5 12h14' ];
 
 	/* Polish ordering for rows this script inserts, so a student added at
 	   4pm lands where a page reload would have put them. The browser's own
@@ -167,6 +165,29 @@
 
 	function format( template, value ) {
 		return String( template || '%s' ).replace( '%s', value );
+	}
+
+	/**
+	 * The same thing with positions, for the strings PHP writes with them.
+	 *
+	 * Handles `%1$s` / `%1$d` and bare `%s` / `%d`, which is every shape the
+	 * i18n array uses. format() above is left alone: its callers pass one value
+	 * against a one-placeholder template, and routing them through here would
+	 * buy nothing.
+	 *
+	 * @param {string} template A translated template string.
+	 * @param {Array}  values   Values, in the order the template numbers them.
+	 * @return {string}
+	 */
+	function sprintf( template, values ) {
+		var next = 0;
+		return String( template || '' ).replace(
+			/%(?:(\d+)\$)?(?:[sd])/g,
+			function ( match, position ) {
+				var value = position ? values[ Number( position ) - 1 ] : values[ next++ ];
+				return ( undefined === value || null === value ) ? '' : String( value );
+			}
+		);
 	}
 
 	/**
@@ -287,15 +308,28 @@
 			empty: app.querySelector( '[data-role="empty"]' ),
 			error: app.querySelector( '[data-role="error"]' ),
 			filter: app.querySelector( '[data-role="filter"]' ),
-			noLevel: app.querySelector( '[data-role="filter-nolevel"]' ),
-			count: app.querySelector( '[data-role="filter-count"]' ),
+			filterClear: app.querySelector( '[data-role="filter-clear"]' ),
+			sort: app.querySelector( '[data-role="sort"]' ),
+			libbar: app.querySelector( '[data-role="libbar"]' ),
+			libbarFilter: app.querySelector( '[data-role="libbar-filter"]' ),
+			libbarRule: app.querySelector( '[data-role="libbar-rule"]' ),
+			summary: app.querySelector( '[data-role="summary"]' ),
+			summaryText: app.querySelector( '[data-role="summary-text"]' ),
 			addToggle: app.querySelector( '[data-role="add-toggle"]' ),
-			addPanel: app.querySelector( '.tbtstu-add' )
+			addPanel: app.querySelector( '.tbtstu-add' ),
+			/* Has anything moved the rows out of the order PHP painted them in?
+			   While this is false and the sort is "by name", applyView() has
+			   nothing to do: the server's Polish collation is already on the
+			   page, and insertStudent() keeps an added row inside it. A grouped
+			   sort sets it, and going back to "by name" is then a real re-sort
+			   through the browser's collator. */
+			grouped: false
 		};
 
-		initFilter( ui );
+		initToolbar( ui );
 		initAddToggle( ui );
 		initSearch( ui );
+		initShortcut( ui );
 
 		// Delegated, so rows added after load — and panels built after that —
 		// behave like the rendered ones without a second binding pass.
@@ -358,79 +392,190 @@
 	}
 
 	/* ------------------------------------------------------------------ *
-	 * The filter
+	 * The view: search, sort, groups
 	 *
 	 * Client-side over rows already on the page. Non-matching rows get the
 	 * `hidden` attribute, which tokens.css pins against Divi's `display`.
+	 *
+	 * Search HIDES; sort GROUPS. Nothing the sort does removes a student from
+	 * the page, which is why the dropdown has no blue state and why the "no
+	 * level" students are a last group rather than a filter of their own.
 	 * ------------------------------------------------------------------ */
 
-	function initFilter( ui ) {
+	function initToolbar( ui ) {
 		if ( ! ui.filter ) {
 			return;
 		}
 
+		// No debounce: this is a loop over rows already in the DOM, and a
+		// delay between the keystroke and the list narrowing would be a delay
+		// this page has no reason to have.
 		ui.filter.addEventListener( 'input', function () {
-			applyFilter( ui );
+			applyView( ui );
 		} );
 
-		ui.noLevel.addEventListener( 'click', function () {
-			var on = 'true' === ui.noLevel.getAttribute( 'aria-pressed' );
-			ui.noLevel.setAttribute( 'aria-pressed', on ? 'false' : 'true' );
-			ui.noLevel.classList.toggle( 'is-on', ! on );
-			applyFilter( ui );
+		ui.filter.addEventListener( 'keydown', function ( event ) {
+			// Escape clears a search in progress. On an empty field it passes
+			// straight through — the browser and the theme both have uses for
+			// it, and swallowing it there would be taking something for free.
+			if ( 'Escape' !== event.key || '' === ui.filter.value ) {
+				return;
+			}
+			event.preventDefault();
+			clearSearch( ui );
 		} );
 
-		// Run once at load so the count, the empty state and the rows are all
-		// decided in one place rather than half here and half in PHP.
-		applyFilter( ui );
+		if ( ui.filterClear ) {
+			ui.filterClear.addEventListener( 'click', function () {
+				clearSearch( ui );
+			} );
+		}
+
+		// The summary's "Clear filters" is the same act as the box's ×, said
+		// in words for the teacher who is reading the count rather than
+		// looking at the box. It does NOT touch the sort: the two are
+		// separate controls and clearing one must not reset the other.
+		var reset = ui.app.querySelector( '[data-role="filter-reset"]' );
+		if ( reset ) {
+			reset.addEventListener( 'click', function () {
+				clearSearch( ui );
+			} );
+		}
+
+		if ( ui.sort ) {
+			ui.sort.addEventListener( 'change', function () {
+				applyView( ui );
+			} );
+		}
+
+		// Run once at load so the summary, the empty state, the toolbar and
+		// the rows are all decided in one place rather than half here and
+		// half in PHP.
+		applyView( ui );
+	}
+
+	function clearSearch( ui ) {
+		ui.filter.value = '';
+		applyView( ui );
+		ui.filter.focus();
 	}
 
 	/**
-	 * Show the rows that match, hide the rest, and say how many that is.
+	 * "/" focuses the search, as it does in the other tools.
 	 *
-	 * A row that is open stays open while it is hidden. Reappearing with its
-	 * panel still open is correct: nothing was closed behind the teacher's
-	 * back, and a panel they were part-way through editing is not something a
-	 * keystroke in the filter box should throw away.
+	 * Not while a modifier is held, not while the teacher is typing into
+	 * something — the add-student box and the profile textarea both take a
+	 * literal slash — and not while the toolbar's filter half is hidden,
+	 * which is the empty list.
 	 */
-	function applyFilter( ui ) {
+	function initShortcut( ui ) {
 		if ( ! ui.filter ) {
 			return;
 		}
+
+		document.addEventListener( 'keydown', function ( event ) {
+			if ( '/' !== event.key || event.ctrlKey || event.metaKey || event.altKey ) {
+				return;
+			}
+
+			var target = event.target;
+			if ( target && ( /^(?:INPUT|TEXTAREA|SELECT)$/.test( target.tagName ) || target.isContentEditable ) ) {
+				return;
+			}
+
+			if ( null === ui.filter.offsetParent ) {
+				return;
+			}
+
+			event.preventDefault();
+			ui.filter.focus();
+		} );
+	}
+
+	/**
+	 * Everything the list looks like, in one pass.
+	 *
+	 * Search visibility, order, group heads, the summary, the empty state and
+	 * the toolbar's own two states are decided together, because every one of
+	 * them is a function of the same two inputs — the search term and the
+	 * chosen sort — and deciding them in separate places is how they drift.
+	 *
+	 * A row that is open stays open, whether it is hidden or moved. Reappearing
+	 * with its panel still open is correct: nothing was closed behind the
+	 * teacher's back, and a panel they were part-way through editing is not
+	 * something a keystroke or a sort change should throw away. Rows are MOVED
+	 * rather than rebuilt for the same reason — a moved node keeps its
+	 * children, and its children are the panel.
+	 */
+	function applyView( ui ) {
+		if ( ! ui.filter ) {
+			return;
+		}
+
+		var sort = ui.sort ? ui.sort.value : 'name';
+		var rows = Array.prototype.slice.call( ui.list.querySelectorAll( '.tbtstu-student' ) );
+
+		// Heads are rebuilt from nothing on every pass. They are cheap, they
+		// depend on what is visible, and a stale one is worse than no head.
+		removeGroupHeads( ui.list );
 
 		// Lower-cased but NOT accent-folded: a teacher who types Ł means Ł, and
 		// folding it to L would hand them back every Lukasz on the list.
 		var term = ui.filter.value.trim().toLowerCase();
-		var onlyNoLevel = 'true' === ui.noLevel.getAttribute( 'aria-pressed' );
-		var rows = ui.list.querySelectorAll( '.tbtstu-student' );
 		var shown = 0;
 
-		Array.prototype.forEach.call( rows, function ( row ) {
-			var match = true;
-
-			if ( '' !== term ) {
-				var name = nameOf( row ).toLowerCase();
-				var email = ( row.getAttribute( 'data-email' ) || '' ).toLowerCase();
-				match = name.indexOf( term ) !== -1 || email.indexOf( term ) !== -1;
-			}
-
-			// AND, not OR: the toggle narrows what the box already found.
-			if ( match && onlyNoLevel ) {
-				match = '' === rowLevel( row );
-			}
-
+		rows.forEach( function ( row ) {
+			var match = '' === term || matchesTerm( row, term );
 			row.hidden = ! match;
 			if ( match ) {
 				shown++;
 			}
 		} );
 
-		ui.count.textContent = String( i18n.countLine || '%1$d of %2$d students' )
-			.replace( '%1$d', shown )
-			.replace( '%2$d', rows.length );
+		// Where the teacher's focus is, before anything moves. A level save
+		// while sorted by level can carry the row into another band, and the
+		// panel they are working in must not be lost off-screen.
+		var focused = document.activeElement;
+		var focusedRow = ( focused && focused.closest ) ? focused.closest( '.tbtstu-student' ) : null;
+		var moved = false;
+
+		if ( 'name' === sort ) {
+			// PHP already painted this order, and insertStudent() maintains it.
+			// Only a list that a grouped sort has rearranged needs sorting back.
+			if ( ui.grouped ) {
+				reorder( ui.list, [ { key: '', rows: byName( rows ) } ] );
+				ui.grouped = false;
+				moved = true;
+			}
+		} else {
+			var groups = groupRows( rows, sort );
+			reorder( ui.list, groups );
+			ui.grouped = true;
+			moved = true;
+			insertGroupHeads( ui.list, sort, groups );
+		}
+
+		if ( moved && focusedRow && ui.list.contains( focusedRow ) ) {
+			focused.focus( { preventScroll: true } );
+			focusedRow.scrollIntoView( { block: 'nearest' } );
+		}
+
+		// The count is worth reading only while something is hidden: an
+		// always-on "24 of 24" is a line nobody looks at twice.
+		if ( ui.summary ) {
+			var searching = '' !== term && rows.length > 0;
+			ui.summary.hidden = ! searching;
+			if ( searching ) {
+				ui.summaryText.textContent = sprintf( i18n.countLine, [ shown, rows.length ] );
+			}
+		}
+
+		if ( ui.filterClear ) {
+			ui.filterClear.hidden = '' === ui.filter.value;
+		}
 
 		// One element, two states. "No students yet" is a teacher who has added
-		// nobody; "No students match" is a filter hiding everyone.
+		// nobody; "No students match" is a search hiding everyone.
 		if ( ! rows.length ) {
 			ui.empty.textContent = i18n.noStudents;
 			ui.empty.hidden = false;
@@ -440,6 +585,161 @@
 		} else {
 			ui.empty.hidden = true;
 		}
+
+		// An empty list has nothing to search and nothing to sort, so the
+		// toolbar gives the row back to the title and its rule. Both halves
+		// return the moment the first student is added — no reload.
+		var isEmpty = ! rows.length;
+		if ( ui.libbar ) {
+			ui.libbar.classList.toggle( 'is-empty', isEmpty );
+		}
+		if ( ui.libbarFilter ) {
+			ui.libbarFilter.hidden = isEmpty;
+		}
+		if ( ui.libbarRule ) {
+			ui.libbarRule.hidden = ! isEmpty;
+		}
+	}
+
+	/**
+	 * Does this row answer the search?
+	 *
+	 * Name, email and Notes class. With Notes inactive every row's class is the
+	 * empty string, so the class arm simply never matches and the placeholder
+	 * PHP rendered already promises only the other two.
+	 */
+	function matchesTerm( row, term ) {
+		if ( nameOf( row ).toLowerCase().indexOf( term ) !== -1 ) {
+			return true;
+		}
+		if ( ( row.getAttribute( 'data-email' ) || '' ).toLowerCase().indexOf( term ) !== -1 ) {
+			return true;
+		}
+		return ( row.getAttribute( 'data-class' ) || '' ).toLowerCase().indexOf( term ) !== -1;
+	}
+
+	function byName( rows ) {
+		return rows.slice().sort( function ( a, b ) {
+			return compare( nameOf( a ), nameOf( b ) );
+		} );
+	}
+
+	/**
+	 * The rows in groups, in the order their heads should appear.
+	 *
+	 * The unset group — no level, or no class — is always last, whichever sort
+	 * this is. It is where a teacher looks for work still to do, and that is
+	 * the end of a list rather than the front of it.
+	 *
+	 * @param {Element[]} rows The rows to group.
+	 * @param {string}    sort 'level' or 'class'.
+	 * @return {Array} [ { key, rows } ], each group's rows A–Z.
+	 */
+	function groupRows( rows, sort ) {
+		var byLevel = 'level' === sort;
+		// Null-prototype, so a class titled "constructor" is a group like any
+		// other rather than a collision with Object's own keys.
+		var buckets = Object.create( null );
+		var keys = [];
+
+		rows.forEach( function ( row ) {
+			var key = byLevel
+				? bandOf( rowLevel( row ) )
+				: ( row.getAttribute( 'data-class' ) || '' );
+
+			if ( ! buckets[ key ] ) {
+				buckets[ key ] = [];
+				keys.push( key );
+			}
+			buckets[ key ].push( row );
+		} );
+
+		keys.sort( function ( a, b ) {
+			if ( '' === a || '' === b ) {
+				return '' === a ? ( '' === b ? 0 : 1 ) : -1;
+			}
+			// Levels run in scale order, A0 → C2. Classes run alphabetically,
+			// under the same Polish collator the names use.
+			return byLevel ? ( BANDS.indexOf( a ) - BANDS.indexOf( b ) ) : compare( a, b );
+		} );
+
+		return keys.map( function ( key ) {
+			return { key: key, rows: byName( buckets[ key ] ) };
+		} );
+	}
+
+	/**
+	 * Put the rows back in the list in the given order.
+	 *
+	 * One fragment and one insertion: appending a node that is already in the
+	 * document moves it, children and all, so every open panel, half-dragged
+	 * slider and unsaved textarea travels with its row.
+	 */
+	function reorder( list, groups ) {
+		var fragment = document.createDocumentFragment();
+
+		groups.forEach( function ( group ) {
+			group.rows.forEach( function ( row ) {
+				fragment.appendChild( row );
+			} );
+		} );
+
+		list.appendChild( fragment );
+	}
+
+	function removeGroupHeads( list ) {
+		var heads = list.querySelectorAll( '[data-role="group-head"]' );
+		Array.prototype.forEach.call( heads, function ( head ) {
+			head.remove();
+		} );
+	}
+
+	function insertGroupHeads( list, sort, groups ) {
+		groups.forEach( function ( group ) {
+			var visible = group.rows.filter( function ( row ) {
+				return ! row.hidden;
+			} ).length;
+
+			list.insertBefore(
+				buildGroupHead( groupName( group.key, sort ), visible ),
+				group.rows[ 0 ]
+			);
+		} );
+	}
+
+	/**
+	 * One group head: the name, the count of what is VISIBLE in it, and a rule
+	 * to the edge. A group the search has emptied keeps its place in the order
+	 * but is hidden — a head over nothing is a promise the list is not keeping.
+	 */
+	function buildGroupHead( name, visible ) {
+		var head = make( 'div', 'tbtstu-group-head', 'group-head' );
+
+		var label = make( 'span', 'tbtstu-group-name' );
+		label.textContent = name;
+
+		var tally = make( 'span', 'tbtstu-group-count' );
+		tally.textContent = sprintf( 1 === visible ? i18n.groupOne : i18n.groupMany, [ visible ] );
+
+		head.appendChild( label );
+		head.appendChild( tally );
+		head.appendChild( make( 'span', 'tbtstu-rule' ) );
+		head.hidden = ! visible;
+
+		return head;
+	}
+
+	/**
+	 * What a group is called. "B1 · intermediate" for a band, the class title
+	 * for a class, and the unset group's own wording for the last one.
+	 */
+	function groupName( key, sort ) {
+		if ( 'level' === sort ) {
+			return '' === key
+				? i18n.noLevel
+				: sprintf( i18n.bandGroup, [ key, BAND_NAMES[ key ] || '' ] );
+		}
+		return '' === key ? i18n.notInClass : key;
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -464,31 +764,21 @@
 	}
 
 	/**
-	 * The Add a student button, in whichever of its two states.
+	 * The toolbar CTA, in whichever of its two states.
 	 *
-	 * Closed it is the primary pill with a plus: it is the one control on this
-	 * page that creates something. Open it drops to the plain pill and reads
-	 * "Close", and the plus is REMOVED rather than rotated into a cross — a
-	 * rotated plus is a close icon that spent a moment pretending to be an add
-	 * icon.
+	 * Closed it is the primary pill: it is the one control on this page that
+	 * creates something. Open it drops to the outline pill and reads "Close".
+	 * There is no glyph in either — the toolbar CTA is a word, and the plus
+	 * that used to sit beside it was one more thing to line up against the
+	 * search box and the sort for nothing.
 	 *
-	 * The contents are rebuilt rather than assigned to textContent, because
-	 * textContent would take the glyph with it.
+	 * The library class stays on through both states: it is what gives the
+	 * button its uppercase and its geometry, and only the colour changes.
 	 */
 	function paintAddToggle( button, open ) {
-		button.className = open ? 'tbtstu-btn' : 'tbtstu-btn tbtstu-btn--primary';
+		button.className = 'tbtstu-btn tbtstu-libbar__cta' + ( open ? '' : ' tbtstu-btn--primary' );
 		button.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
-		button.textContent = '';
-
-		if ( ! open ) {
-			var glyph = icon( PLUS_ICON, 14, 2.4 );
-			glyph.setAttribute( 'class', 'tbtstu-btn-icon' );
-			button.appendChild( glyph );
-		}
-
-		var label = document.createElement( 'span' );
-		label.textContent = open ? i18n.addHide : i18n.addShow;
-		button.appendChild( label );
+		button.textContent = open ? i18n.addHide : i18n.addShow;
 	}
 
 	function initSearch( ui ) {
@@ -599,7 +889,7 @@
 			// The block stays open on purpose: adding two students in a row is
 			// the common case, and collapsing after each one would make the
 			// second add cost a click that the first did not.
-			applyFilter( ui );
+			applyView( ui );
 		} ).catch( function ( err ) {
 			showError( ui.error, err.message );
 		} );
@@ -621,6 +911,7 @@
 		row.className = 'tbtstu-student ' + colourClass( student.user_id );
 		row.setAttribute( 'data-student-id', student.user_id );
 		row.setAttribute( 'data-email', student.email || '' );
+		row.setAttribute( 'data-class', student.class || '' );
 		row.setAttribute( 'data-level', student.level || '' );
 		row.setAttribute( 'data-level-manual', Number( student.level_manual ) ? '1' : '0' );
 		row.setAttribute( 'data-profile', student.profile || '' );
@@ -700,9 +991,12 @@
 	/**
 	 * Put a new row where a page reload would have put it.
 	 *
-	 * The list is flat now, so this is one walk down it comparing names under
-	 * the browser's Polish collator. It is a client-side insert position only:
-	 * a reload re-sorts through PHP, which stays authoritative.
+	 * One walk down the list comparing names under the browser's Polish
+	 * collator — the same order PHP painted, so a name-sorted list never has to
+	 * be re-sorted just because somebody was added. Under a grouped sort this
+	 * position is temporary: applyView() runs straight after and moves the row
+	 * into its band or its class. A reload re-sorts through PHP either way,
+	 * which stays authoritative.
 	 */
 	function insertStudent( list, student ) {
 		var row = buildRow( student );
@@ -1139,9 +1433,10 @@
 			panel.removeAttribute( 'data-dirty' );
 			statusLine( row, 'status', i18n.saved );
 
-			// The "No level set" toggle reads data-level, so a save can change
-			// whether this row still belongs in the filtered list.
-			applyFilter( ui );
+			// Sorted by level, a save can move this row into another band — so
+			// the view is rebuilt rather than just the chip repainted. The row
+			// keeps its open panel and its focus; applyView() sees to that.
+			applyView( ui );
 		} ).catch( function ( err ) {
 			// Nothing is reverted: the teacher's edits stay in the panel so
 			// they can be tried again, and the row's own attributes were never
@@ -1296,8 +1591,9 @@
 
 		post( 'tbtstu_remove', { student_id: row.getAttribute( 'data-student-id' ) } ).then( function () {
 			row.remove();
-			// The count and the empty state both move when a row goes.
-			applyFilter( ui );
+			// The summary, the group counts, the empty state and the toolbar
+			// itself all move when a row goes.
+			applyView( ui );
 		} ).catch( function ( err ) {
 			showError( ui.error, err.message );
 		} );

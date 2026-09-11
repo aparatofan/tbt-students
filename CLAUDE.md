@@ -23,8 +23,8 @@ Keep this file concise. It is loaded at the start of every Claude Code session.
 
 - The plugin does three core things: a teacher lists an existing student account, sets that student's overall CEFR level and five CEFR skill levels, and writes a short profile note about them.
 - Needs analysis, placement tests, scores, and student-facing views are deliberately out of scope. Do not add placeholder tables, columns, screens, or abstractions for future features unless explicitly asked. In particular there is no placement-test column, and a column waiting for that feature is a column that will be wrong when it arrives.
-- Finding a student is a text filter plus a "No level set" toggle. Filtering by band or by skill is out of scope.
-- The plugin is intentionally standalone. Do not introduce a dependency on TBT Notes, Swipe, Register, or Hub to solve a local task.
+- Finding a student is the library toolbar: a text search (name, email, Notes class) and a Sort dropdown (name, level band, Notes class) that groups the list and never hides anyone. Filtering by band or by skill is out of scope.
+- The plugin is intentionally standalone. The one exception is an optional, read-only bridge to `TBT_Notes_DB::get_class_for_student()` for a student's class name (`classes_available()` / `class_title()` in the frontend class). Everything must keep working with Notes inactive. Do not add any other dependency on Notes, Swipe, Register or Hub to solve a local task.
 
 ## Data and API invariants
 
